@@ -183,13 +183,16 @@ Archive with an empty kit **690**; an abandoned Relay run was saved once as ABAN
 25 of 25 interface checks passed (name validation, shortcuts, Stop, Restart, early alert,
 history toggle).
 
-**Oracle:** scripts and repository complete and tested offline. The database listener at
-`localhost:1521/FREEPDB1` answered during the build, but the live run of the scripts and of
-`tests/manual_oracle_check.py` is pending until the HEIST password is configured in `.env`.
+**Oracle (live, 27 Oct 2026, Oracle AI Database 26ai Free 23.26.3, FREEPDB1, Thin mode):**
+`setup_oracle.sql` ran three times without errors and all 15 objects are VALID;
+`oracle_manual_test.sql` gave the expected saves, statistics (2 / 1 / 810 / 810), ORA-20001
+and ORA-20002 rejections, rank titles, audit rows and cursor report;
+`tests/manual_oracle_check.py` printed ALL CHECKS PASSED; and the real game in Oracle mode
+saved Gallery (810) and Relay (790) through `HP_SAVE_RUN` and read them back in History.
 
 ## 12. Limitations
 
-- Oracle live verification pending (see above).
+- Oracle tested live on 26ai Free only; 19c compatibility is by design, not run on a 19c server.
 - Fixed maps; no enemy AI or sound.
 
 ## 13. Future improvements

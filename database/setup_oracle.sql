@@ -379,6 +379,10 @@ END;
 /
 
 PROMPT Checking object status ...
+SET LINESIZE 120
+SET PAGESIZE 50
+COLUMN object_name FORMAT A25
+COLUMN object_type FORMAT A12
 SELECT object_name, object_type, status
   FROM user_objects
  WHERE object_name LIKE 'HP\_%' ESCAPE '\'

@@ -12,6 +12,11 @@ SET SERVEROUTPUT ON
 -- =====================================================================
 SET LINESIZE 160
 SET PAGESIZE 50
+COLUMN r810 FORMAT A12
+COLUMN r700 FORMAT A12
+COLUMN r500 FORMAT A12
+COLUMN r100 FORMAT A12
+COLUMN db_user FORMAT A15
 
 PROMPT === 1. HP_SAVE_RUN saves a run and returns its ID ===
 DECLARE

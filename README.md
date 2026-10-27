@@ -211,8 +211,19 @@ Friendly error messages: server nahi mila → "Oracle server could not be reache
 `ORA-01017` → "Oracle username or password is wrong"; `ORA-00942` / `ORA-06550` /
 `PLS-00201` → "Oracle tables or procedures not found — run database/setup_oracle.sql first".
 
-**Oracle status of this build:** see Section 13 — the Oracle code and scripts are
-complete and tested offline, but the live test against my database is still pending.
+**Oracle status of this build — tested live on 27 Oct 2026** against my Oracle AI Database
+26ai Free (23.26.3, Route A, `FREEPDB1`, user `heist`, `oracledb` Thin mode):
+
+- `setup_oracle.sql` ran three times in a row without errors; all 15 objects VALID
+  (4 tables, 1 sequence, 1 trigger, 3 procedures, 1 function, 5 indexes).
+- `oracle_manual_test.sql`: saves, stats (2 / 1 / 810 / 810, unknown player all 0),
+  `ORA-20001` and `ORA-20002` rejections, rank titles, audit rows and the cursor report all
+  as expected; test rows rolled back.
+- `python tests\manual_oracle_check.py`: **ALL CHECKS PASSED** (data rolled back).
+- Game in Oracle mode: About showed "Oracle PL/SQL connected"; Gallery (810) and Relay
+  (790, alert with decoy) were saved through `HP_SAVE_RUN`, and History read them back from
+  Oracle with ranks from `HP_RANK_TITLE`. Those two runs are real game rows and are still
+  in the database.
 
 ## 7. Controls
 
@@ -412,11 +423,9 @@ connection) 7, validation 4.
 
 ## 13. Limitations and future work
 
-- **Oracle live test pending:** all Oracle files are written and the Python side is tested
-  offline with a fake connection; the listener at `localhost:1521/FREEPDB1` was reachable
-  during the build, but `setup_oracle.sql`, `oracle_manual_test.sql`,
-  `tests/manual_oracle_check.py` and a game in Oracle mode have **not yet been run against
-  the real database** (the HEIST password is needed). Steps: Section 6.
+- Oracle mode was tested live on Oracle AI Database 26ai Free only (Section 6). The 19c
+  compatibility of `setup_oracle.sql` comes from avoiding 23ai-only syntax; it was not run on
+  a real 19c server (FreeSQL.com / college server).
 - Three fixed maps; no map editor, no enemy AI, no sound (out of scope by design).
 - On this laptop's 1280×720 (scaled) screen the window is sized to the screen (about 1180×630)
   instead of the planned 1180×760; all screens were checked at 1000×620.
