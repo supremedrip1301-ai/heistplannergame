@@ -92,7 +92,10 @@ class GameplayScreen(BaseScreen):
             ("menu", "Return to Menu", self.return_to_menu, 3, 1, "TButton"),
         ]
         for key, text, command, row, col, style in layout:
-            button = ttk.Button(buttons, text=text, command=command, style=style)
+            # takefocus=False: a focused button would also react to Space, and
+            # Space is already the Move Next Step shortcut.
+            button = ttk.Button(buttons, text=text, command=command, style=style,
+                                takefocus=False)
             button.grid(row=row, column=col, sticky="ew", padx=(0 if col == 0 else 4, 0),
                         pady=3)
             self.buttons[key] = button
