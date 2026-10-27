@@ -44,7 +44,10 @@ class CapacityBar(tk.Canvas):
     """Horizontal bar such as "Energy used: 5 / 8"."""
 
     def __init__(self, parent, capacity: int, bg: str = styles.PANEL, height: int = 22):
-        super().__init__(parent, height=height, bg=bg, highlightthickness=0, bd=0)
+        # A small requested width: the grid stretches the bar to fill its column,
+        # and the Canvas default (about 380 px) would widen the side panel.
+        super().__init__(parent, width=160, height=height, bg=bg,
+                         highlightthickness=0, bd=0)
         self.capacity = capacity
         self.used = 0
         self.bind("<Configure>", lambda e: self.redraw())

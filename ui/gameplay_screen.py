@@ -206,6 +206,8 @@ class GameplayScreen(BaseScreen):
         elif run.position == run.mission.exit and not run.objective_collected:
             self.set_message("This is the extraction point, but you do not have the "
                              "objective yet.", warn=True)
+        elif self.auto_running:
+            self.set_message("Auto Travel engaged.")
         else:
             self.set_message("")
         self.refresh()

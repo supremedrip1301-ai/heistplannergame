@@ -35,10 +35,15 @@ class GadgetRow:
         self.tag = ttk.Label(title, text="Recommended", style="Tag.TLabel")
         self.tag.grid(row=0, column=1, sticky="w", padx=(10, 0))
         self.tag.grid_remove()
-        ttk.Label(self.frame, text=gadget.description, style="CardDim.TLabel").grid(
-            row=1, column=0, sticky="w")
-        ttk.Label(self.frame, text=gadget.effect, style="CardDim.TLabel",
-                  foreground=styles.ACCENT).grid(row=2, column=0, sticky="w")
+        self.texts = [
+            ttk.Label(self.frame, text=gadget.description, style="CardDim.TLabel",
+                      wraplength=360, justify="left"),
+            ttk.Label(self.frame, text=gadget.effect, style="CardDim.TLabel",
+                      foreground=styles.ACCENT, wraplength=360, justify="left"),
+        ]
+        self.texts[0].grid(row=1, column=0, sticky="w")
+        self.texts[1].grid(row=2, column=0, sticky="w")
+        self.frame.bind("<Configure>", self.on_resize)
 
         ttk.Label(self.frame, text=f"{gadget.energy_cost} energy", style="Card.TLabel",
                   font=styles.font(10, "bold")).grid(row=0, column=1, rowspan=3, padx=16)
@@ -51,6 +56,11 @@ class GadgetRow:
                                      style="Card.TCheckbutton",
                                      command=lambda: on_toggle(self))
         self.check.grid(row=0, column=4, rowspan=3)
+
+    def on_resize(self, event) -> None:
+        # Leave room for the energy, bars and Pack columns on the right.
+        for label in self.texts:
+            label.configure(wraplength=max(180, event.width - 270))
 
     def show_usefulness(self, value: int) -> None:
         bars, word = usefulness_level(value)
