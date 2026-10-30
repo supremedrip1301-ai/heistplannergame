@@ -47,7 +47,7 @@ class TestSQLiteRepository(unittest.TestCase):
         self.repo = SQLiteRepository(self.path)
         self.repo.initialise()                       # second start: INSERT OR IGNORE
         count = self.repo.conn.execute("SELECT COUNT(*) FROM missions").fetchone()[0]
-        self.assertEqual(count, 3)
+        self.assertEqual(count, 6)
 
     def test_save_appears_in_history_and_stats(self):
         run_id = self.repo.save_run(sample_record())

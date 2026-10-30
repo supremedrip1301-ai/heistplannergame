@@ -212,3 +212,41 @@ def count_walkable_groups(grid, walkable_chars):
                 union(parent, rank, (r, c), nxt)
     roots = {find(parent, t) for t in tiles}
     return len(roots)
+
+
+# ======================================================================
+# Bellman-Ford on an implicit graph - an independent check for the
+# state-graph Dijkstra in core/state_planner.py (used only by tests).
+# ======================================================================
+def bellman_ford(start, successors_fn):
+    """Minimum cost from start to every reachable state.
+
+    successors_fn(state) returns [(next_state, cost), ...]. All states are
+    collected first (breadth-first), then every edge is relaxed repeatedly
+    until nothing changes (at most V - 1 rounds) - O(V * E), much slower than
+    Dijkstra, but it does not rely on a priority queue at all.
+    """
+    states = [start]
+    seen = {start}
+    edges = []
+    i = 0
+    while i < len(states):
+        state = states[i]
+        i += 1
+        for nxt, cost in successors_fn(state):
+            edges.append((state, nxt, cost))
+            if nxt not in seen:
+                seen.add(nxt)
+                states.append(nxt)
+
+    dist = {state: float("inf") for state in states}
+    dist[start] = 0
+    for _ in range(len(states) - 1):
+        changed = False
+        for u, v, w in edges:
+            if dist[u] + w < dist[v]:
+                dist[v] = dist[u] + w
+                changed = True
+        if not changed:
+            break
+    return dist
