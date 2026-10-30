@@ -299,7 +299,8 @@ class MissionRun:
         """The terminal puzzle for this run (created the first time)."""
         if self.puzzle is None:
             self.puzzle = make_puzzle(self.mission.puzzle_kind,
-                                      f"{self.puzzle_seed}-{self.run_token}")
+                                      f"{self.puzzle_seed}-{self.run_token}",
+                                      self.mission.puzzle_size)
         return self.puzzle
 
     def submit_terminal(self, answer) -> tuple:

@@ -5,14 +5,11 @@ the game's algorithms against independent versions I wrote in class:
 
 * dijkstra_matrix()  - DAA Experiment 4 (adjacency matrix, O(V^2)), with the
                        indentation bug from my worksheet fixed.
-* knapsack_bb()      - DAA Experiment 6 (0/1 Knapsack, Branch and Bound).
 * find() / union()   - DAA Experiment 3 (Kruskal's Union-Find helpers).
+* bellman_ford()     - an independent shortest-path check (no priority queue).
 * grid_to_matrix()   - turns a mission map into the adjacency matrix that
                        dijkstra_matrix() expects.
 """
-
-import heapq
-from itertools import count
 
 
 # ======================================================================
@@ -84,84 +81,6 @@ def grid_to_matrix(grid, tile_costs, blocked=frozenset()):
                 v = index_of[nxt]
                 matrix[u][v] = tile_costs[grid[nxt[0]][nxt[1]]]
     return matrix, index_of
-
-
-# ======================================================================
-# DAA Experiment 6 - 0/1 Knapsack using Branch and Bound
-# (copied from my worksheet; only the formatting/indentation was cleaned)
-# ======================================================================
-def knapsack_bb(weights, profits, capacity):
-
-    n = len(weights)
-    # Sort by profit/weight ratio
-    items = sorted(zip(weights, profits, range(n)),
-                   key=lambda x: x[1] / x[0], reverse=True)
-    w = [item[0] for item in items]
-    p = [item[1] for item in items]
-    original = [item[2] for item in items]
-
-    # Upper bound = profit + fractional (greedy) profit of remaining items
-    def bound(level, profit, weight):
-
-        if weight > capacity:
-            return 0
-
-        result = profit
-        total_weight = weight
-        j = level + 1
-        while j < n and total_weight + w[j] <= capacity:
-
-            total_weight += w[j]
-            result += p[j]
-            j += 1
-        if j < n:
-            result += (capacity - total_weight) * p[j] / w[j]
-        return result
-
-    pq = []                       # max-heap (negative bound)
-
-    tie = count()
-
-    heapq.heappush(pq, (-bound(-1, 0, 0), next(tie), -1, 0, 0, []))
-
-    max_profit = 0
-    best_items = []
-
-    while pq:
-
-        neg_bound, _, level, profit, weight, selected = heapq.heappop(pq)
-
-        if -neg_bound <= max_profit:                  # cannot beat best -> prune
-            continue
-
-        i = level + 1
-
-        if i >= n:
-            continue
-
-        # Include item i
-        new_weight = weight + w[i]
-        new_profit = profit + p[i]
-        new_selected = selected + [i]
-
-        if new_weight <= capacity and new_profit > max_profit:
-            max_profit = new_profit
-            best_items = new_selected
-
-        if new_weight <= capacity:
-            b = bound(i, new_profit, new_weight)
-            if b > max_profit:
-                heapq.heappush(pq, (-b, next(tie), i, new_profit,
-                                    new_weight, new_selected))
-
-        # Exclude item i
-        b = bound(i, profit, weight)
-        if b > max_profit:
-            heapq.heappush(pq, (-b, next(tie), i, profit, weight, selected))
-
-    chosen = sorted(original[i] for i in best_items)
-
-    return max_profit, [i + 1 for i in chosen]
 
 
 # ======================================================================

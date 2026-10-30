@@ -29,10 +29,9 @@ HOW_TO_PLAY = [
      "The planner always looks for the lowest total effort, not just the fewest steps."),
     ("4. Keycards, doors and terminals",
      "A locked door opens only once you have walked over the keycard. Laser barriers stay "
-     "on until you hack the terminal [H]. Terminal puzzles: Power Relay (draw the lightest "
-     "path of numbered cells from IN to OUT) and Cargo Lock (load the lift with the most "
-     "credits without passing the mass limit). Only the best possible answer works; a wrong "
-     "answer is a lockout (+5 effort)."),
+     "on until you hack the terminal [H]. The terminal is a Power Relay: draw the lightest "
+     "path of numbered cells from IN to OUT (6 x 6 in the Lab, 7 x 7 in the Penthouse). "
+     "Only the lightest possible path works; a wrong answer is a lockout (+5 effort)."),
     ("5. Collect and extract",
      "Stand on the objective and press Collect Objective. Your target switches to the "
      "extraction point: plan again and get out."),
@@ -124,12 +123,12 @@ class AboutScreen(TextPage):
              "the four moves and Wait, with the cost of the tile entered; edges into a drone's "
              "view are left out. A heapq priority queue gives O((V + E) log V). Tests "
              "cross-check it with Bellman-Ford and with my matrix Dijkstra (DAA Exp 4)."),
-            ("Terminal puzzles → the algorithms are the judges",
-             "Power Relay is checked with Dijkstra (minimum path load). Cargo Lock is the 0/1 "
-             "Knapsack problem: crate mass is the weight, credits are the value and the lift "
-             "limit is the capacity; a DP table best[i][c] finds the maximum. Puzzles where a "
-             "greedy choice would already win are thrown away, so the player has to plan. "
-             "Tests cross-check the DP with brute force and my Branch and Bound (DAA Exp 6)."),
+            ("Terminal puzzle → Dijkstra is the judge",
+             "The Power Relay is a shortest-path problem: each numbered cell is a vertex and "
+             "the number is the cost of entering it. Dijkstra computes the minimum load, and "
+             "only a path with exactly that load is accepted. Grids where a greedy walk "
+             "(always the cheaper next cell) would already win are thrown away, so the player "
+             "has to plan. Tests cross-check the answer with a brute-force search."),
             ("Technologies",
              "Python 3 standard library: tkinter / ttk / Canvas (all graphics are drawn "
              "shapes), heapq, dataclasses, sqlite3, json, logging, pathlib, unittest.\n"

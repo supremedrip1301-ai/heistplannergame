@@ -1,10 +1,8 @@
-"""Tests for core/puzzles.py (terminal puzzles judged by Dijkstra and Knapsack DP)."""
+"""Tests for core/puzzles.py (the Power Relay terminal puzzle, judged by Dijkstra)."""
 
-import itertools
 import unittest
 
-from core.puzzles import (CARGO, POWER, CargoLockPuzzle, PowerRelayPuzzle,
-                          make_puzzle)
+from core.puzzles import POWER, PowerRelayPuzzle, make_puzzle
 
 
 def brute_force_min_load(puzzle):
@@ -33,17 +31,26 @@ class TestPowerRelay(unittest.TestCase):
     def test_same_seed_same_puzzle(self):
         self.assertEqual(PowerRelayPuzzle("x").grid, PowerRelayPuzzle("x").grid)
 
+    def test_sizes(self):
+        for size in (6, 7):
+            puzzle = PowerRelayPuzzle(1, size)
+            self.assertEqual(len(puzzle.grid), size)
+            self.assertEqual({len(row) for row in puzzle.grid}, {size})
+            self.assertEqual(puzzle.goal, (size - 1, size - 1))
+
     def test_solution_is_accepted(self):
-        for seed in range(20):
-            puzzle = PowerRelayPuzzle(seed)
-            ok, _ = puzzle.check(puzzle.solution)
-            self.assertTrue(ok, seed)
-            self.assertEqual(puzzle.load(puzzle.solution), puzzle.best)
+        for size in (6, 7):
+            for seed in range(20):
+                puzzle = PowerRelayPuzzle(seed, size)
+                ok, _ = puzzle.check(puzzle.solution)
+                self.assertTrue(ok, (size, seed))
+                self.assertEqual(puzzle.load(puzzle.solution), puzzle.best)
 
     def test_greedy_path_is_not_enough(self):
-        for seed in range(20):
-            puzzle = PowerRelayPuzzle(seed)
-            self.assertGreater(puzzle.greedy_load(), puzzle.best, seed)
+        for size in (6, 7):
+            for seed in range(20):
+                puzzle = PowerRelayPuzzle(seed, size)
+                self.assertGreater(puzzle.greedy_load(), puzzle.best, (size, seed))
 
     def test_dijkstra_best_equals_brute_force(self):
         for seed in range(5):
@@ -54,42 +61,17 @@ class TestPowerRelay(unittest.TestCase):
         puzzle = PowerRelayPuzzle(1)
         self.assertFalse(puzzle.check([])[0])
         self.assertFalse(puzzle.check([(0, 0), (1, 1), (5, 5)])[0])        # not touching
+        self.assertFalse(puzzle.check([(0, 0), (0, 1), (0, 0)])[0])        # repeated cell
         straight = [(0, c) for c in range(6)] + [(r, 5) for r in range(1, 6)]
         ok, message = puzzle.check(straight)
         self.assertEqual(ok, puzzle.load(straight) == puzzle.best)
         self.assertIn("Load", message)
 
-
-class TestCargoLock(unittest.TestCase):
-
-    def test_best_equals_brute_force(self):
-        for seed in range(20):
-            puzzle = CargoLockPuzzle(seed)
-            best = 0
-            for r in range(len(puzzle.crates) + 1):
-                for combo in itertools.combinations(puzzle.crates, r):
-                    if sum(c[1] for c in combo) <= puzzle.limit:
-                        best = max(best, sum(c[2] for c in combo))
-            self.assertEqual(puzzle.best, best, seed)
-
-    def test_solution_accepted_and_greedy_not_enough(self):
-        for seed in range(20):
-            puzzle = CargoLockPuzzle(seed)
-            self.assertTrue(puzzle.check(puzzle.solution)[0])
-            self.assertLess(puzzle.greedy_worth(), puzzle.best, seed)
-
-    def test_too_heavy_rejected(self):
-        puzzle = CargoLockPuzzle(3)
-        everything = [c[0] for c in puzzle.crates]
-        ok, message = puzzle.check(everything)
-        self.assertFalse(ok)
-        self.assertIn("limit", message)
-
     def test_factory(self):
-        self.assertEqual(make_puzzle(POWER, 1).kind, POWER)
-        self.assertEqual(make_puzzle(CARGO, 1).kind, CARGO)
+        self.assertEqual(make_puzzle(POWER, 1).size, 6)
+        self.assertEqual(make_puzzle(POWER, 1, 7).size, 7)
         with self.assertRaises(ValueError):
-            make_puzzle("chess", 1)
+            make_puzzle("cargo", 1)
 
 
 if __name__ == "__main__":

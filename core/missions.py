@@ -53,7 +53,7 @@ class Mission:
     def __init__(self, mission_id: str, name: str, difficulty: str, mission_type: str,
                  hook: str, goal: str, condition: str, extraction: str,
                  objective_name: str, grid: list, drones=(), puzzle_kind=None,
-                 risk_bonus: int = 0):
+                 puzzle_size: int = 6, risk_bonus: int = 0):
         self.mission_id = mission_id
         self.name = name
         self.difficulty = difficulty
@@ -70,7 +70,8 @@ class Mission:
         self.keycard = self.find_tile(KEYCARD)
         self.terminal = self.find_tile(TERMINAL)
         self.drones = list(drones)         # core.drones.Drone objects
-        self.puzzle_kind = puzzle_kind     # "power" / "cargo" / None (terminal puzzle)
+        self.puzzle_kind = puzzle_kind     # "power" or None (terminal puzzle)
+        self.puzzle_size = puzzle_size     # Power Relay grid is size x size
         self.risk_bonus = risk_bonus       # extra score for the long, dangerous missions
 
     @property
@@ -216,16 +217,17 @@ MISSIONS = {
     ),
     "penthouse": Mission(
         "penthouse", "The Penthouse", "Master", "mastermind",
-        hook="Drones, a keycard, lasers and a cargo lock - all at once.",
+        hook="Drones, a keycard, lasers and a giant power relay - all at once.",
         goal="Open the penthouse safe in the east wing.",
-        condition="Static fields, three drones, and a cargo-lock terminal sealed behind a locked door.",
+        condition="Static fields, three drones, and a 7 x 7 power-relay terminal behind a locked door.",
         extraction="Ride the service shaft down to extraction in the lower-left corner.",
         objective_name="penthouse safe",
         grid=PENTHOUSE_MAP,
         drones=[Drone("Atrium guard", [(1, 4), (3, 4)]),
                 Drone("Gallery floor", [(9, 5), (9, 9)]),
                 Drone("East shaft", [(3, 10), (7, 10)])],
-        puzzle_kind="cargo",
+        puzzle_kind="power",
+        puzzle_size=7,
         risk_bonus=config.RISK_BONUS["penthouse"],
     ),
 }

@@ -49,12 +49,12 @@ class TestMissionMaps(unittest.TestCase):
 
     def test_keycard_door_terminal_lasers(self):
         self.assertFalse(MISSIONS["vault"].has_keycard)
-        for mission_id, kind in (("lab", "power"), ("penthouse", "cargo")):
+        for mission_id, size in (("lab", 6), ("penthouse", 7)):
             m = MISSIONS[mission_id]
             self.assertTrue(m.has_keycard and m.has_terminal)
             self.assertGreaterEqual(len(m.door_tiles()), 1)
             self.assertGreaterEqual(len(m.laser_tiles()), 1)
-            self.assertEqual(m.puzzle_kind, kind)
+            self.assertEqual((m.puzzle_kind, m.puzzle_size), ("power", size))
 
     def test_static_field_cost(self):
         self.assertEqual(build_tile_costs()["~"], 4)
