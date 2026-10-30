@@ -106,7 +106,7 @@ class PreparationScreen(BaseScreen):
         side = ttk.Frame(self, style="Panel.TFrame", padding=18)
         side.grid(row=1, column=1, sticky="nsew", padx=(0, 32), pady=(4, 16))
         side.columnconfigure(0, weight=1)
-        side.rowconfigure(6, weight=1)
+        side.rowconfigure(7, weight=1)
         ttk.Label(side, text="Kit Status", style="PanelHeading.TLabel").grid(
             row=0, column=0, sticky="w")
         self.energy_label = ttk.Label(side, text="", style="PanelValue.TLabel")
@@ -121,9 +121,13 @@ class PreparationScreen(BaseScreen):
         self.message = ttk.Label(side, text="", style="PanelDim.TLabel", wraplength=250,
                                  justify="left")
         self.message.grid(row=5, column=0, sticky="nw", pady=(4, 0))
+        self.pro_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(side, text="Pro mode: no route guidance (+25% score)",
+                        variable=self.pro_var, style="Panel.TCheckbutton").grid(
+            row=6, column=0, sticky="w", pady=(10, 0))
 
         buttons = ttk.Frame(side, style="Panel.TFrame")
-        buttons.grid(row=7, column=0, sticky="ew")
+        buttons.grid(row=8, column=0, sticky="ew")
         buttons.columnconfigure(0, weight=1, uniform="pb")
         buttons.columnconfigure(1, weight=1, uniform="pb")
         ttk.Button(buttons, text="Back", command=lambda: app.show("mission_select")).grid(
@@ -155,6 +159,7 @@ class PreparationScreen(BaseScreen):
                 row.var.set(False)
             else:
                 row.var.set(gadget_id in self.app.kit_ids)
+        self.pro_var.set(self.app.pro_mode)
         self.set_message("Tick gadgets to pack them, or press Suggested Kit.")
         self.update_status()
 
@@ -213,6 +218,7 @@ class PreparationScreen(BaseScreen):
                 return
         self.app.kit_ids = kit
         self.app.best_usefulness = self.best.total_usefulness
+        self.app.pro_mode = self.pro_var.get()
         self.app.run = MissionRun(self.app.player_name, self.mission, kit,
-                                  self.best.total_usefulness)
+                                  self.best.total_usefulness, pro_mode=self.app.pro_mode)
         self.app.show("gameplay")

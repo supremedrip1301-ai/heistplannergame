@@ -8,8 +8,10 @@ from ui import styles
 from ui.base_screen import BaseScreen
 from ui.map_view import draw_mini_map
 
-DIFFICULTY_STYLE = {"Easy": styles.GREEN, "Medium": styles.AMBER, "Hard": styles.RED}
-THUMB_TILE = 9
+DIFFICULTY_STYLE = {"Easy": styles.GREEN, "Medium": styles.AMBER, "Hard": styles.RED,
+                    "Expert": styles.EXPERT, "Master": styles.MASTER}
+THUMB_TILE = 7
+CARDS_PER_ROW = 3
 MAX_ROWS = max(m.rows for m in MISSIONS.values())
 
 
@@ -17,10 +19,10 @@ class MissionCard(ttk.Frame):
     """One clickable mission card."""
 
     def __init__(self, parent, mission, on_select):
-        super().__init__(parent, style="Card.TFrame", padding=12)
+        super().__init__(parent, style="Card.TFrame", padding=10)
         self.mission = mission
         self.on_select = on_select
-        self.columnconfigure(0, weight=1)
+        self.columnconfigure(1, weight=1)
 
         # Same canvas size for every card (the tallest map has 11 rows), so the
         # card texts line up even though the Relay map is taller.
@@ -28,24 +30,24 @@ class MissionCard(ttk.Frame):
         height = MAX_ROWS * THUMB_TILE
         self.thumb = tk.Canvas(self, width=width, height=height, bg=styles.PANEL_ALT,
                                highlightthickness=0, bd=0)
-        self.thumb.grid(row=0, column=0, sticky="w")
-        draw_mini_map(self.thumb, mission.grid, THUMB_TILE)
+        self.thumb.grid(row=0, column=0, rowspan=3, sticky="nw", padx=(0, 10))
+        draw_mini_map(self.thumb, mission.grid, THUMB_TILE, drones=mission.drones)
 
         self.name_label = ttk.Label(self, text=mission.name, style="CardHeading.TLabel")
-        self.name_label.grid(row=1, column=0, sticky="w", pady=(10, 0))
+        self.name_label.grid(row=0, column=1, sticky="w")
         self.level_label = tk.Label(self, text=mission.difficulty.upper(),
                                     fg=DIFFICULTY_STYLE[mission.difficulty],
                                     bg=styles.PANEL_ALT, font=styles.font(8, "bold"))
-        self.level_label.grid(row=2, column=0, sticky="w")
+        self.level_label.grid(row=1, column=1, sticky="w")
         self.hook_label = ttk.Label(self, text=mission.hook, style="CardDim.TLabel",
-                                    wraplength=230, justify="left")
-        self.hook_label.grid(row=3, column=0, sticky="w", pady=(4, 0))
+                                    wraplength=180, justify="left")
+        self.hook_label.grid(row=2, column=1, sticky="nw", pady=(2, 0))
 
         for widget in (self, self.thumb, self.name_label, self.level_label, self.hook_label):
             widget.bind("<Button-1>", lambda e: self.on_select(self.mission.mission_id))
             widget.configure(cursor="hand2")
         self.bind("<Configure>", lambda e: self.hook_label.configure(
-            wraplength=max(150, e.width - 30)))
+            wraplength=max(110, e.width - width - 40)))
 
     def set_selected(self, selected: bool) -> None:
         if selected:
@@ -70,7 +72,7 @@ class MissionSelectScreen(BaseScreen):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(2, weight=1)
 
-        header = ttk.Frame(self, padding=(36, 20, 36, 8))
+        header = ttk.Frame(self, padding=(36, 14, 36, 6))
         header.grid(row=0, column=0, sticky="ew")
         ttk.Label(header, text="Choose a Mission", style="Title.TLabel").grid(
             row=0, column=0, sticky="w")
@@ -82,12 +84,14 @@ class MissionSelectScreen(BaseScreen):
         self.cards = {}
         for i, mission_id in enumerate(MISSION_ORDER):
             card = MissionCard(cards, MISSIONS[mission_id], self.select)
-            card.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 12, 0))
-            cards.columnconfigure(i, weight=1, uniform="cards")
+            row, col = divmod(i, CARDS_PER_ROW)
+            card.grid(row=row, column=col, sticky="nsew", padx=(0 if col == 0 else 10, 0),
+                      pady=(0 if row == 0 else 10, 0))
+            cards.columnconfigure(col, weight=1, uniform="cards")
             self.cards[mission_id] = card
 
         # Briefing panel
-        brief = ttk.Frame(self, style="Panel.TFrame", padding=(20, 14))
+        brief = ttk.Frame(self, style="Panel.TFrame", padding=(20, 10))
         brief.grid(row=2, column=0, sticky="nsew", padx=36, pady=(4, 8))
         brief.columnconfigure(1, weight=1)
         self.brief_title = ttk.Label(brief, text="Mission Briefing",

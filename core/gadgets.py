@@ -32,22 +32,22 @@ SHIELD = "shield"
 GADGETS = {
     SCANNER: Gadget(SCANNER, "Pocket Scanner", 3,
                     "Spots weak points in the facility before you enter.",
-                    "Relay: the gate that will be sealed is outlined in amber."),
+                    "Shows where drones look next turn; marks the Relay's weak gate."),
     DECOY: Gadget(DECOY, "Signal Decoy", 4,
                   "Absorbs the blame when an alarm goes off.",
-                  "Cancels the alert penalty in the score."),
+                  "Freezes every drone for 3 turns (once); cancels the alert penalty."),
     BOOTS: Gadget(BOOTS, "Mobility Boots", 3,
                   "Light boots that glide over static fields.",
                   "Static fields cost 2 effort instead of 4."),
     REPAIR: Gadget(REPAIR, "Repair Module", 2,
                    "Patches up worn gear between rooms.",
-                   "Counts toward mission readiness."),
+                   "The first wrong terminal answer costs nothing."),
     LENS: Gadget(LENS, "Clue Lens", 2,
                  "Reveals hidden markings on panels and files.",
-                 "Counts toward mission readiness."),
+                 "Shows the target answer at hacking terminals."),
     SHIELD: Gadget(SHIELD, "Shield Patch", 5,
                    "A bulky barrier against stray sparks.",
-                   "Counts toward mission readiness."),
+                   "Survive one drone sighting."),
 }
 
 # Display order on the preparation screen.

@@ -29,6 +29,10 @@ DEFAULT_PLAYER_NAME = "Agent"
 MAX_PLAYER_NAME_LENGTH = 30
 HISTORY_LIMIT = 100
 
+# Hard missions
+DECOY_FREEZE_TURNS = 3        # Signal Decoy freezes every drone for this many turns
+TERMINAL_PENALTY = 5          # effort added by a wrong terminal answer (lockout)
+
 # Tile costs (cost of ENTERING a tile).
 FLOOR_COST = 1
 STATIC_FIELD_COST = 4

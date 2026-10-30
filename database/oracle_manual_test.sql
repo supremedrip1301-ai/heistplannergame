@@ -23,11 +23,13 @@ DECLARE
     v_run_id NUMBER;
 BEGIN
     hp_save_run('SQLPLUS_TEST', 'gallery', 'SUCCESS', 810, 24, 28,
-                'Pocket Scanner, Mobility Boots, Repair Module', 'N', v_run_id);
+                'Pocket Scanner, Mobility Boots, Repair Module', 'N', 'N', v_run_id);
     DBMS_OUTPUT.PUT_LINE('OK  - saved run ' || v_run_id);
-    hp_save_run('SQLPLUS_TEST', 'relay', 'ABANDONED', 0, 7, 9, 'None', 'Y', v_run_id);
+    hp_save_run('SQLPLUS_TEST', 'relay', 'ABANDONED', 0, 7, 9, 'None', 'Y', 'N', v_run_id);
     DBMS_OUTPUT.PUT_LINE('OK  - saved abandoned run ' || v_run_id
                          || ' (same player reused, not duplicated)');
+    hp_save_run('SQLPLUS_TEST', 'vault', 'CAUGHT', 0, 12, 14, 'Shield Patch', 'N', 'Y', v_run_id);
+    DBMS_OUTPUT.PUT_LINE('OK  - saved CAUGHT pro-mode run ' || v_run_id || ' (new mission)');
 END;
 /
 
@@ -38,7 +40,7 @@ BEGIN
     hp_get_stats('SQLPLUS_TEST', v_total, v_success, v_best, v_avg);
     DBMS_OUTPUT.PUT_LINE('SQLPLUS_TEST: runs ' || v_total || ', successful ' || v_success
                          || ', best ' || v_best || ', average ' || v_avg
-                         || '   (expected 2, 1, 810, 810)');
+                         || '   (expected 3, 1, 810, 810)');
     hp_get_stats('NOBODY_AT_ALL', v_total, v_success, v_best, v_avg);
     DBMS_OUTPUT.PUT_LINE('Unknown player: runs ' || v_total || ', successful ' || v_success
                          || ', best ' || v_best || ', average ' || v_avg
@@ -52,7 +54,7 @@ PROMPT === 3. Invalid input is reported with RAISE_APPLICATION_ERROR ===
 DECLARE
     v_run_id NUMBER;
 BEGIN
-    hp_save_run('SQLPLUS_TEST', 'gallery', 'SUCCESS', -5, 1, 1, 'None', 'N', v_run_id);
+    hp_save_run('SQLPLUS_TEST', 'gallery', 'SUCCESS', -5, 1, 1, 'None', 'N', 'N', v_run_id);
     DBMS_OUTPUT.PUT_LINE('FAIL - a negative score was accepted');
 EXCEPTION
     WHEN OTHERS THEN
@@ -62,7 +64,7 @@ END;
 DECLARE
     v_run_id NUMBER;
 BEGIN
-    hp_save_run('SQLPLUS_TEST', 'moonbase', 'SUCCESS', 100, 1, 1, 'None', 'N', v_run_id);
+    hp_save_run('SQLPLUS_TEST', 'moonbase', 'SUCCESS', 100, 1, 1, 'None', 'N', 'N', v_run_id);
     DBMS_OUTPUT.PUT_LINE('FAIL - an unknown mission was accepted');
 EXCEPTION
     WHEN OTHERS THEN

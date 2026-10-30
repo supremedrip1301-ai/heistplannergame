@@ -13,6 +13,7 @@ from ui.info_screens import AboutScreen, HowToPlayScreen
 from ui.menu_screen import MenuScreen
 from ui.mission_select_screen import MissionSelectScreen
 from ui.preparation_screen import PreparationScreen
+from ui.terminal_screen import TerminalScreen
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ SCREEN_CLASSES = {
     "mission_select": MissionSelectScreen,
     "preparation": PreparationScreen,
     "gameplay": GameplayScreen,
+    "terminal": TerminalScreen,
     "debrief": DebriefScreen,
     "history": HistoryScreen,
 }
@@ -41,8 +43,11 @@ class MainWindow:
         self.mission_id = None
         self.kit_ids = ()
         self.best_usefulness = 0
+        self.pro_mode = False
         self.run = None                     # the current MissionRun
         self.last_save_message = ""         # shown on the debrief screen
+        self.terminal_message = ""          # result of the last terminal visit
+        self.next_screen = None             # where show() is going (for can_leave)
 
         self.setup_window()
         styles.apply_style(root)
@@ -111,8 +116,12 @@ class MainWindow:
         """Switch to another screen. Returns False if the current one refused."""
         current = self.current_screen
         if current is not None and name != self.current_name:
-            if not current.can_leave():
-                return False
+            self.next_screen = name
+            try:
+                if not current.can_leave():
+                    return False
+            finally:
+                self.next_screen = None
             current.on_hide()
         self.current_name = name
         screen = self.screens[name]

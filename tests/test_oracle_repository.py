@@ -78,8 +78,8 @@ class TestOracleRepositoryOffline(unittest.TestCase):
         self.assertEqual(repo.save_run(RECORD), 42)
         name, args = repo.conn.calls[0]
         self.assertEqual(name, "HP_SAVE_RUN")
-        self.assertEqual(args[:8], ["Tester", "relay", "SUCCESS", 760, 32, 32,
-                                    "Signal Decoy", "Y"])
+        self.assertEqual(args[:9], ["Tester", "relay", "SUCCESS", 760, 32, 32,
+                                    "Signal Decoy", "Y", "N"])
         self.assertEqual((repo.conn.commits, repo.conn.rollbacks), (1, 0))
         self.assertEqual(repo.conn.cursors_closed, 1)
 

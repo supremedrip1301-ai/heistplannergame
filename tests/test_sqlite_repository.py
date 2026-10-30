@@ -104,6 +104,50 @@ class TestSQLiteRepository(unittest.TestCase):
         self.repo.save_run(sample_record(player_name=name))
         self.assertEqual(self.repo.get_recent_runs()[0]["player_name"], name)
 
+    def test_caught_and_pro_mode_are_stored(self):
+        self.repo.save_run(sample_record(result="CAUGHT", score=0, mission_id="vault"))
+        self.repo.save_run(sample_record(pro_mode=True))
+        runs = self.repo.get_recent_runs()
+        self.assertEqual([(r["result"], r["pro_mode"]) for r in runs],
+                         [("SUCCESS", "Y"), ("CAUGHT", "N")])
+        stats = self.repo.get_stats("Tester")
+        self.assertEqual((stats["total_runs"], stats["success_runs"]), (2, 1))
+
+    def test_old_save_file_is_upgraded(self):
+        # Build a save file the way the first version of the game did.
+        self.repo.close()
+        old_path = Path(self.folder) / "old.db"
+        conn = sqlite3.connect(str(old_path))
+        conn.executescript("""
+            CREATE TABLE players (player_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                  player_name TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+            CREATE TABLE missions (mission_id TEXT PRIMARY KEY, mission_name TEXT NOT NULL,
+                                   difficulty TEXT NOT NULL);
+            CREATE TABLE mission_runs (
+                run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id INTEGER NOT NULL REFERENCES players(player_id),
+                mission_id TEXT NOT NULL REFERENCES missions(mission_id),
+                result TEXT NOT NULL CHECK (result IN ('SUCCESS', 'ABANDONED')),
+                score INTEGER NOT NULL CHECK (score >= 0), moves INTEGER NOT NULL,
+                route_cost INTEGER NOT NULL, kit_summary TEXT,
+                alert_triggered TEXT NOT NULL CHECK (alert_triggered IN ('Y', 'N')),
+                played_at TEXT NOT NULL);
+            INSERT INTO players (player_name, created_at) VALUES ('Old', '2026-10-27T10:00:00');
+            INSERT INTO missions VALUES ('gallery', 'The Gallery', 'Medium');
+            INSERT INTO mission_runs (player_id, mission_id, result, score, moves, route_cost,
+                                      kit_summary, alert_triggered, played_at)
+                VALUES (1, 'gallery', 'SUCCESS', 810, 24, 28, 'Boots', 'N', '2026-10-27T10:05:00');
+        """)
+        conn.commit()
+        conn.close()
+        self.repo = SQLiteRepository(old_path)
+        self.repo.initialise()
+        old_runs = self.repo.get_recent_runs()
+        self.assertEqual(len(old_runs), 1)                   # nothing lost
+        self.assertEqual((old_runs[0]["score"], old_runs[0]["pro_mode"]), (810, "N"))
+        self.repo.save_run(sample_record(result="CAUGHT", score=0))   # new value now allowed
+        self.assertEqual(len(self.repo.get_recent_runs()), 2)
+
     def test_engine_save_path_saves_only_once(self):
         run = ge.MissionRun("Tester", MISSIONS["archive"])
         run.plan_route()

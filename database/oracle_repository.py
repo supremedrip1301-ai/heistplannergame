@@ -103,6 +103,7 @@ class OracleRepository(BaseRepository):
                     record["route_cost"],
                     record["kit_summary"],
                     "Y" if record["alert_triggered"] else "N",
+                    "Y" if record.get("pro_mode") else "N",
                     run_id,
                 ])
             self.conn.commit()           # Python owns the transaction
@@ -132,7 +133,7 @@ class OracleRepository(BaseRepository):
         sql = """
             SELECT r.run_id, p.player_name, m.mission_name, r.result, r.score, r.moves,
                    r.route_cost, r.kit_summary, r.alert_triggered,
-                   TO_CHAR(r.played_at, 'YYYY-MM-DD HH24:MI:SS') AS played_at,
+                   TO_CHAR(r.played_at, 'YYYY-MM-DD HH24:MI:SS') AS played_at, r.pro_mode,
                    HP_RANK_TITLE(r.score) AS rank_title
               FROM hp_mission_runs r
               JOIN hp_players p ON p.player_id = r.player_id

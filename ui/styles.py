@@ -41,6 +41,20 @@ TILE_OBJECTIVE = "#2A2A12"
 ROUTE = ACCENT
 CHARACTER = ACCENT
 CHARACTER_RING = "#0E4D47"
+# hard-mission tiles and drones
+KEYCARD = "#4EA8DE"
+TILE_DOOR = "#3B2A1A"
+DOOR_FRAME = "#C98A3D"
+TERMINAL_BODY = "#22324A"
+TERMINAL_SCREEN = KEYCARD
+LASER_BEAM = RED
+DRONE_BODY = RED
+DRONE_RING = "#5A1A1E"
+DRONE_FROZEN = "#8FB8DE"
+VISION = RED                 # drawn with a stipple, so the floor stays visible
+VISION_NEXT = AMBER          # Pocket Scanner: where drones look next turn
+MASTER = "#B57CFF"           # difficulty label colour for "Master"
+EXPERT = "#FF7A45"           # difficulty label colour for "Expert"
 
 # ---------------------------------------------------------------- fonts
 FONT_FAMILY = "Segoe UI"   # replaced by a safe fallback in apply_style()

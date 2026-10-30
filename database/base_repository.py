@@ -5,11 +5,11 @@ its methods (inheritance + method overriding). The game only talks to this
 interface, so the game logic never depends on which database is used.
 
 A run record is a plain dict with the keys:
-    player_name, mission_id, result ('SUCCESS'/'ABANDONED'), score, moves,
-    route_cost, kit_summary, alert_triggered (bool)
+    player_name, mission_id, result ('SUCCESS'/'ABANDONED'/'CAUGHT'), score, moves,
+    route_cost, kit_summary, alert_triggered (bool), pro_mode (bool, optional)
 """
 
-RESULT_VALUES = ("SUCCESS", "ABANDONED")
+RESULT_VALUES = ("SUCCESS", "ABANDONED", "CAUGHT")
 
 
 def check_record(record: dict) -> None:
@@ -20,7 +20,7 @@ def check_record(record: dict) -> None:
         if key not in record:
             raise ValueError(f"Missing field: {key}")
     if record["result"] not in RESULT_VALUES:
-        raise ValueError("Result must be SUCCESS or ABANDONED.")
+        raise ValueError("Result must be SUCCESS, ABANDONED or CAUGHT.")
     if record["score"] < 0 or record["moves"] < 0 or record["route_cost"] < 0:
         raise ValueError("Score, moves and effort cannot be negative.")
     if not str(record["player_name"]).strip():

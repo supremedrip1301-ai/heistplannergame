@@ -39,6 +39,26 @@ class TestScoring(unittest.TestCase):
         self.assertEqual(scoring.readiness_percent(15, 15), 100)
         self.assertEqual(scoring.readiness_percent(9, 14), 64)
 
+    def test_risk_bonus_and_pro_bonus(self):
+        normal = scoring.calculate_score(15, 15, 40, False, False, risk_bonus=150)
+        self.assertEqual(normal.total, 500 + 200 + 100 + 150 + 150 - 200)
+        pro = scoring.calculate_score(15, 15, 40, False, False, pro_mode=True, risk_bonus=150)
+        self.assertEqual(pro.pro_bonus, round(0.25 * normal.total))
+        self.assertEqual(pro.total, normal.total + pro.pro_bonus)
+        self.assertEqual(sum(amount for _, amount in pro.lines()), pro.total)
+        labels = [label for label, _ in pro.lines()]
+        self.assertIn("High-risk bonus", labels)
+        self.assertIn("Pro mode bonus (+25%)", labels)
+
+    def test_pro_bonus_never_on_negative(self):
+        result = scoring.calculate_score(0, 15, 1000, True, False, pro_mode=True)
+        self.assertEqual((result.pro_bonus, result.total), (0, 0))
+
+    def test_old_breakdown_unchanged(self):
+        labels = [label for label, _ in scoring.calculate_score(15, 15, 28, False, False).lines()]
+        self.assertEqual(labels, ["Mission success", "Objective secured", "Clean extraction",
+                                  "Preparation bonus", "Effort spent", "Alert raised"])
+
     def test_rank_thresholds(self):
         self.assertEqual(scoring.rank_title(810), "Phantom")
         self.assertEqual(scoring.rank_title(800), "Phantom")

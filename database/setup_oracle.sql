@@ -131,7 +131,8 @@ CREATE TABLE hp_mission_runs (
     mission_id      VARCHAR2(20) NOT NULL
                     CONSTRAINT hp_runs_mission_fk REFERENCES hp_missions (mission_id),
     result          VARCHAR2(12) NOT NULL
-                    CONSTRAINT hp_runs_result_ck CHECK (result IN ('SUCCESS', 'ABANDONED')),
+                    CONSTRAINT hp_runs_result_ck
+                    CHECK (result IN ('SUCCESS', 'ABANDONED', 'CAUGHT')),
     score           NUMBER(6) NOT NULL
                     CONSTRAINT hp_runs_score_ck CHECK (score >= 0),
     moves           NUMBER(5) NOT NULL,
@@ -139,7 +140,9 @@ CREATE TABLE hp_mission_runs (
     kit_summary     VARCHAR2(200),
     alert_triggered CHAR(1) DEFAULT 'N' NOT NULL
                     CONSTRAINT hp_runs_alert_ck CHECK (alert_triggered IN ('Y', 'N')),
-    played_at       DATE DEFAULT SYSDATE NOT NULL
+    played_at       DATE DEFAULT SYSDATE NOT NULL,
+    pro_mode        CHAR(1) DEFAULT 'N' NOT NULL
+                    CONSTRAINT hp_runs_pro_ck CHECK (pro_mode IN ('Y', 'N'))
 );
 
 -- Audit table + sequence (my college Program 6 pattern).
@@ -175,6 +178,30 @@ USING (SELECT 'gallery' AS mission_id, 'The Gallery' AS mission_name,
 MERGE INTO hp_missions m
 USING (SELECT 'relay' AS mission_id, 'The Relay' AS mission_name,
               'Hard' AS difficulty FROM dual) s
+   ON (m.mission_id = s.mission_id)
+ WHEN MATCHED THEN UPDATE SET m.mission_name = s.mission_name, m.difficulty = s.difficulty
+ WHEN NOT MATCHED THEN INSERT (mission_id, mission_name, difficulty)
+                       VALUES (s.mission_id, s.mission_name, s.difficulty);
+
+MERGE INTO hp_missions m
+USING (SELECT 'vault' AS mission_id, 'The Vault' AS mission_name,
+              'Hard' AS difficulty FROM dual) s
+   ON (m.mission_id = s.mission_id)
+ WHEN MATCHED THEN UPDATE SET m.mission_name = s.mission_name, m.difficulty = s.difficulty
+ WHEN NOT MATCHED THEN INSERT (mission_id, mission_name, difficulty)
+                       VALUES (s.mission_id, s.mission_name, s.difficulty);
+
+MERGE INTO hp_missions m
+USING (SELECT 'lab' AS mission_id, 'The Lab' AS mission_name,
+              'Expert' AS difficulty FROM dual) s
+   ON (m.mission_id = s.mission_id)
+ WHEN MATCHED THEN UPDATE SET m.mission_name = s.mission_name, m.difficulty = s.difficulty
+ WHEN NOT MATCHED THEN INSERT (mission_id, mission_name, difficulty)
+                       VALUES (s.mission_id, s.mission_name, s.difficulty);
+
+MERGE INTO hp_missions m
+USING (SELECT 'penthouse' AS mission_id, 'The Penthouse' AS mission_name,
+              'Master' AS difficulty FROM dual) s
    ON (m.mission_id = s.mission_id)
  WHEN MATCHED THEN UPDATE SET m.mission_name = s.mission_name, m.difficulty = s.difficulty
  WHEN NOT MATCHED THEN INSERT (mission_id, mission_name, difficulty)
@@ -229,6 +256,7 @@ CREATE OR REPLACE PROCEDURE hp_save_run (
     p_route_cost  IN  NUMBER,
     p_kit_summary IN  VARCHAR2,
     p_alert       IN  VARCHAR2,
+    p_pro_mode    IN  VARCHAR2,
     p_run_id      OUT NUMBER
 )
 IS
@@ -247,8 +275,9 @@ BEGIN
         RAISE invalid_numbers;
     END IF;
 
-    IF p_result IS NULL OR p_result NOT IN ('SUCCESS', 'ABANDONED')
-       OR p_alert IS NULL OR p_alert NOT IN ('Y', 'N') THEN
+    IF p_result IS NULL OR p_result NOT IN ('SUCCESS', 'ABANDONED', 'CAUGHT')
+       OR p_alert IS NULL OR p_alert NOT IN ('Y', 'N')
+       OR p_pro_mode IS NULL OR p_pro_mode NOT IN ('Y', 'N') THEN
         RAISE invalid_result;
     END IF;
 
@@ -290,9 +319,9 @@ BEGIN
 
     -- 4. Store the run and hand its new ID back through the OUT parameter.
     INSERT INTO hp_mission_runs (player_id, mission_id, result, score, moves,
-                                 route_cost, kit_summary, alert_triggered)
+                                 route_cost, kit_summary, alert_triggered, pro_mode)
     VALUES (v_player_id, p_mission_id, p_result, p_score, p_moves,
-            p_route_cost, p_kit_summary, p_alert)
+            p_route_cost, p_kit_summary, p_alert, p_pro_mode)
     RETURNING run_id INTO p_run_id;
 
     -- No COMMIT here on purpose: the caller (Python) owns the transaction.
@@ -300,7 +329,8 @@ EXCEPTION
     WHEN invalid_numbers THEN
         RAISE_APPLICATION_ERROR(-20001, 'Score, moves and route cost must be zero or more.');
     WHEN invalid_result THEN
-        RAISE_APPLICATION_ERROR(-20003, 'Result must be SUCCESS or ABANDONED, alert Y or N.');
+        RAISE_APPLICATION_ERROR(-20003,
+            'Result must be SUCCESS, ABANDONED or CAUGHT; alert and pro mode Y or N.');
     WHEN invalid_player THEN
         RAISE_APPLICATION_ERROR(-20004, 'Player name must not be empty.');
 END;
@@ -401,7 +431,7 @@ PROMPT Setup finished. Run database/oracle_manual_test.sql to try everything.
 --     v_run_id NUMBER;
 -- BEGIN
 --     hp_save_run('DemoAgent', 'gallery', 'SUCCESS', 810, 24, 28,
---                 'Pocket Scanner, Mobility Boots, Repair Module', 'N', v_run_id);
+--                 'Pocket Scanner, Mobility Boots, Repair Module', 'N', 'N', v_run_id);
 --     DBMS_OUTPUT.PUT_LINE('Saved run ' || v_run_id);
 -- END;
 -- /

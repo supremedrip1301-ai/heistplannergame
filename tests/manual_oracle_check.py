@@ -64,7 +64,7 @@ def main() -> int:
             cursor.callproc("HP_SAVE_RUN", [record["player_name"], record["mission_id"],
                                             record["result"], record["score"],
                                             record["moves"], record["route_cost"],
-                                            record["kit_summary"], "N", run_id])
+                                            record["kit_summary"], "N", "N", run_id])
             new_id = run_id.getvalue()
         ok &= check(f"HP_SAVE_RUN returned run ID {new_id}", isinstance(new_id, int))
 
@@ -85,7 +85,7 @@ def main() -> int:
         try:
             with conn.cursor() as cursor:
                 cursor.callproc("HP_SAVE_RUN", [TEST_PLAYER, "gallery", "SUCCESS", -1, 1, 1,
-                                                "None", "N", cursor.var(int)])
+                                                "None", "N", "N", cursor.var(int)])
             ok &= check("Negative score rejected", False)
         except oracledb.DatabaseError as error:
             ok &= check(f"Negative score rejected ({str(error).splitlines()[0]})",

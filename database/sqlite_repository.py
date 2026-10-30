@@ -32,14 +32,27 @@ CREATE TABLE IF NOT EXISTS mission_runs (
     run_id          INTEGER PRIMARY KEY AUTOINCREMENT,
     player_id       INTEGER NOT NULL REFERENCES players(player_id),
     mission_id      TEXT NOT NULL REFERENCES missions(mission_id),
-    result          TEXT NOT NULL CHECK (result IN ('SUCCESS', 'ABANDONED')),
+    result          TEXT NOT NULL CHECK (result IN ('SUCCESS', 'ABANDONED', 'CAUGHT')),
     score           INTEGER NOT NULL CHECK (score >= 0),
     moves           INTEGER NOT NULL,
     route_cost      INTEGER NOT NULL,
     kit_summary     TEXT,
     alert_triggered TEXT NOT NULL CHECK (alert_triggered IN ('Y', 'N')),
-    played_at       TEXT NOT NULL
+    played_at       TEXT NOT NULL,
+    pro_mode        TEXT NOT NULL DEFAULT 'N' CHECK (pro_mode IN ('Y', 'N'))
 );
+"""
+
+# Save files made before the hard-puzzle update have no pro_mode column and a
+# CHECK constraint without 'CAUGHT'. SQLite cannot change a CHECK constraint,
+# so the table is rebuilt once and every old row is copied across.
+OLD_COLUMNS = ("run_id, player_id, mission_id, result, score, moves, route_cost, "
+               "kit_summary, alert_triggered, played_at")
+MIGRATION = f"""
+ALTER TABLE mission_runs RENAME TO mission_runs_old;
+{SCHEMA}
+INSERT INTO mission_runs ({OLD_COLUMNS}) SELECT {OLD_COLUMNS} FROM mission_runs_old;
+DROP TABLE mission_runs_old;
 """
 
 
@@ -56,12 +69,19 @@ class SQLiteRepository(BaseRepository):
         self.conn.execute("PRAGMA foreign_keys = ON")
         with self.conn:                       # one transaction: commit or roll back
             self.conn.executescript(SCHEMA)
+            if not self.has_column("mission_runs", "pro_mode"):
+                logger.info("Upgrading an old save file (adding CAUGHT and pro_mode)")
+                self.conn.executescript(MIGRATION)
             for mission in MISSIONS.values():
                 self.conn.execute(
                     "INSERT OR IGNORE INTO missions (mission_id, mission_name, difficulty) "
                     "VALUES (?, ?, ?)",
                     (mission.mission_id, mission.name, mission.difficulty))
         logger.info("SQLite ready at %s", self.db_path)
+
+    def has_column(self, table: str, column: str) -> bool:
+        rows = self.conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return any(row["name"] == column for row in rows)
 
     def save_run(self, record: dict) -> int:
         check_record(record)
@@ -75,11 +95,12 @@ class SQLiteRepository(BaseRepository):
                                     (record["player_name"],)).fetchone()
             cursor = self.conn.execute(
                 "INSERT INTO mission_runs (player_id, mission_id, result, score, moves, "
-                "route_cost, kit_summary, alert_triggered, played_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "route_cost, kit_summary, alert_triggered, played_at, pro_mode) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (row["player_id"], record["mission_id"], record["result"], record["score"],
                  record["moves"], record["route_cost"], record["kit_summary"],
-                 "Y" if record["alert_triggered"] else "N", now))
+                 "Y" if record["alert_triggered"] else "N", now,
+                 "Y" if record.get("pro_mode") else "N"))
             run_id = cursor.lastrowid
         logger.info("Saved run %d (%s, %s, score %d)", run_id, record["player_name"],
                     record["mission_id"], record["score"])
@@ -106,7 +127,7 @@ class SQLiteRepository(BaseRepository):
     def get_recent_runs(self, limit: int = 100, player_name=None) -> list:
         limit = max(1, min(int(limit), 1000))
         sql = ("SELECT r.run_id, p.player_name, m.mission_name, r.result, r.score, r.moves, "
-               "r.route_cost, r.kit_summary, r.alert_triggered, r.played_at "
+               "r.route_cost, r.kit_summary, r.alert_triggered, r.played_at, r.pro_mode "
                "FROM mission_runs r "
                "JOIN players p ON p.player_id = r.player_id "
                "JOIN missions m ON m.mission_id = r.mission_id")
