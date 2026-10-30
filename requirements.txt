@@ -1,6 +1,0 @@
-# Heist Planner Game needs NO extra packages in the default SQLite mode.
-# Everything it uses (tkinter, sqlite3, heapq, json, logging, pathlib,
-# dataclasses, unittest) is part of the Python standard library.
-#
-# Optional - only for Oracle mode (DATABASE_BACKEND=oracle):
-oracledb>=3.0
