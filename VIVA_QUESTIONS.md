@@ -216,9 +216,87 @@ mission?"). `BaseRepository` defines the database methods; `SQLiteRepository` an
 `OracleRepository` override them.
 
 **42. How many tests are there and what do they cover?**
-96 `unittest` tests: pathfinding, missions, optimiser, scoring, engine, SQLite, Oracle
-(offline with a fake connection) and validation. Run with
-`python -m unittest discover -s tests -v`.
+157 `unittest` tests: pathfinding, missions, optimiser, scoring, engine, hard missions,
+drones, state planner, puzzles, SQLite, Oracle (offline with a fake connection) and
+validation. Run with `python -m unittest discover -s tests -v`.
+
+## F. The hard-puzzle missions (Vault, Lab, Penthouse)
+
+**43. How do the patrol drones work?**
+Each drone has a fixed patrol made of straight lines (`core/drones.py`). A ping-pong patrol
+of n tiles repeats every 2(n − 1) turns, so its position at turn t is `cycle[t mod period]`.
+After every player turn (move or Wait) every drone advances one tile. It sees its own tile
+and two tiles ahead in the direction it is about to move; walls and locked doors block the
+view. Being in a drone's view, or swapping tiles with it, fails the mission.
+
+**44. Why can't you plan the Vault with the normal tile Dijkstra?**
+Because whether a tile is safe depends on *when* you are there. The same move is safe at
+turn 4 and deadly at turn 5. A vertex that is only a tile cannot express that, so the
+plain shortest path walks straight into a drone (a test proves this for every leg).
+
+**45. What is a "state graph"?**
+A graph whose vertices are complete situations, not just places. Here a vertex is
+`(row, col, drone_clock, has_key, freeze_left)`. Edges are the actions of one turn: four
+moves and Wait. A move that would be seen is simply not an edge. Then the ordinary
+Dijkstra finds the cheapest safe sequence of moves and waits.
+
+**46. Why is the drone clock stored modulo the LCM of the patrol lengths?**
+After LCM(periods) turns every drone is back where it started, so turn 3 and turn 3 + LCM
+look exactly the same. Storing `t mod LCM` keeps the graph finite and small (Vault 16,
+Lab 24, Penthouse 8 values).
+
+**47. Is it still Dijkstra? Is it still correct?**
+Yes: same heap, same stale-entry skip, same `previous` map. All edge costs are positive
+(1, 2 or 4 for moves, 1 for Wait), which is all Dijkstra needs. The graph is just bigger:
+at most 132 × 24 × 2 × 4 states. Tests show the costs equal Bellman-Ford's on the same
+graph, and equal the tile Dijkstra when there are no drones or keycards.
+
+**48. Why compare with Bellman-Ford?**
+Bellman-Ford finds shortest paths by relaxing every edge up to V − 1 times, without any
+priority queue. It is O(V·E), slow but simple, so it is an independent check: if both
+algorithms agree on every hard mission, the heap version is very unlikely to be wrong.
+
+**49. How does the planner deal with the keycard and the locked door?**
+`has_key` is part of the vertex. A door edge only exists when `has_key` is true, and
+stepping on the keycard tile sets it. So "fetch the keycard first" is not a special rule:
+Dijkstra discovers that the only way through the door goes past the keycard.
+
+**50. What happens when the lasers block every route?**
+Lasers are blocked tiles until the terminal is hacked. If no route to the target exists,
+the engine plans to the terminal instead and tells the player to hack it.
+
+**51. How are the terminal puzzles related to the algorithms?**
+Power Relay is a shortest-path problem: its answer is checked with `find_shortest_path`
+(Dijkstra). Cargo Lock is a 0/1 Knapsack: its answer is checked with the same DP as the
+Suggested Kit. The algorithms are the judges, and the player has to beat them by hand.
+
+**52. Why can't the player just use a greedy strategy in the puzzles?**
+The generator throws away every puzzle where greedy already wins (always step to the
+cheaper next cell; always take the best credits-per-kg crate). So the player meets exactly
+the situations where greedy fails, which is why DAA uses Dijkstra and DP for these problems.
+
+**53. What does each gadget do in the hard missions?**
+Scanner: shows next-turn drone vision. Decoy: freezes every drone for 3 turns, once (the
+planner models this with `freeze_left`). Shield: survive one sighting. Lens: shows the
+target number of the puzzle. Repair: first wrong answer is free. Boots: static fields 2.
+The Knapsack values for the new missions reflect these powers.
+
+**54. How were the new maps verified?**
+Tests check for each hard mission: drones only patrol walkable tiles, the start is never
+watched, every leg (to terminal, to objective, home) has a safe route, every leg needs
+timing, the keycard and terminal are really required, and a route home exists at every
+clock value. The Penthouse patrols were chosen by an exhaustive search over drone triples.
+
+**55. What is Pro mode and how is it scored?**
+Plan Route and Auto Travel are switched off; the player reads the patrols and moves with
+the arrow keys and Wait. Pro runs get +25% of the score (only when it is positive), and are
+stored with `pro_mode = 'Y'` in SQLite and Oracle.
+
+**56. What changed in the database for the upgrade?**
+A new result `CAUGHT` and a new column `PRO_MODE` (CHECK Y/N); `HP_SAVE_RUN` got a
+`p_pro_mode` parameter; the three new missions are seeded with `MERGE`. Old SQLite files
+are migrated once (rename table, create new, copy rows, drop old) because SQLite cannot
+change a CHECK constraint.
 
 ---
 
@@ -241,7 +319,14 @@ mission?"). `BaseRepository` defines the database methods; `SQLiteRepository` an
 5. **History** — Main Menu → Mission History: both runs once each, with rank, effort and
    kit; toggle "All players". (20 s)
 6. **About** — show the algorithm credits and the database mode line. (15 s)
-7. **(Optional, Oracle mode)** — in a terminal:
+7. **Hard mission (extra 2 minutes if the teacher asks for more)** — The Vault: point at
+   the red vision tiles, press **P**: the route shows amber wait badges ("25 steps (4 waits)").
+   Explain the state graph (question 45). Then The Lab with the Suggested Kit: **P** goes to
+   the terminal via the keycard; at the terminal press **H**, show the Power Relay and the
+   Clue Lens target, submit a wrong path once (Repair absorbs it), then the right one.
+   Finally switch on Pro mode on the Vault and walk straight ahead to get "Spotted by the
+   Shaft guard"; show "Caught · PRO" in History.
+8. **(Optional, Oracle mode)** — in a terminal:
    `sqlplus heist@localhost:1521/FREEPDB1` then `SET SERVEROUTPUT ON`,
    `EXEC HP_PRINT_RECENT_RUNS(5)` and `SELECT * FROM hp_run_audit;` to show the rows the
    game just saved through `HP_SAVE_RUN` and the trigger. (Route B container:

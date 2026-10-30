@@ -11,6 +11,10 @@ from ui.base_screen import BaseScreen
 
 def outcome_sentence(run) -> str:
     """A short, friendly summary of how the mission went."""
+    if run.pro_mode:
+        return "Pro mode, no guidance, and nobody saw a thing. That was real planning."
+    if run.mission.drones and run.waits:
+        return f"Clean extraction. You waited {run.waits} turn(s) in the shadows and the drones never knew."
     if run.alert_triggered and run.carries_decoy:
         return "The alarm screamed, but your decoy took the blame. Smooth work."
     if run.alert_triggered:

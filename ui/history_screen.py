@@ -13,14 +13,15 @@ logger = logging.getLogger(__name__)
 COLUMNS = (
     ("player", "Player", 110),
     ("mission", "Mission", 100),
-    ("result", "Result", 90),
+    ("result", "Result", 125),
     ("score", "Score", 60),
     ("rank", "Rank", 90),
     ("moves", "Moves", 60),
     ("effort", "Effort", 60),
-    ("kit", "Kit", 230),
+    ("kit", "Kit", 200),
     ("date", "Date/Time", 140),
 )
+RESULT_TEXT = {"SUCCESS": "Success", "ABANDONED": "Abandoned", "CAUGHT": "Caught"}
 EMPTY_TEXT = "No missions on record yet — your first debrief will appear here."
 
 
@@ -85,6 +86,7 @@ class HistoryScreen(BaseScreen):
             self.tree.column(key, width=width, minwidth=50, anchor=anchor,
                              stretch=(key == "kit"))
         self.tree.tag_configure("abandoned", foreground=styles.TEXT_DIM)
+        self.tree.tag_configure("caught", foreground=styles.RED)
         self.tree.tag_configure("odd", background=styles.PANEL_ALT)
         scroll_y = ttk.Scrollbar(table, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll_y.set)
@@ -129,9 +131,13 @@ class HistoryScreen(BaseScreen):
             tags = []
             if run["result"] == "ABANDONED":
                 tags.append("abandoned")
+            elif run["result"] == "CAUGHT":
+                tags.append("caught")
             if i % 2 == 1:
                 tags.append("odd")
-            result = "Success" if run["result"] == "SUCCESS" else "Abandoned"
+            result = RESULT_TEXT.get(run["result"], run["result"])
+            if run.get("pro_mode") == "Y":
+                result = result + " · PRO"
             if run["alert_triggered"] == "Y":
                 result = result + " ▲"
             self.tree.insert("", "end", values=(

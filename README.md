@@ -4,8 +4,12 @@ A small top-down tactical puzzle game written in **Python + Tkinter**. You plan 
 of gadgets, guide an operative through a fictional facility, collect the objective
 and reach extraction. Under the hood the game uses **Dijkstra's shortest-path
 algorithm** (route guidance) and the **0/1 Knapsack problem solved with dynamic
-programming** (Suggested Kit). Results are saved in **SQLite** by default, or in
-**Oracle Database through real PL/SQL stored procedures** when Oracle mode is on.
+programming** (Suggested Kit). The three hard missions add patrol drones, keycards,
+locked doors, laser barriers and hacking terminals: routes are then planned with
+**Dijkstra on a state graph** (tile + drone clock + keycard + decoy freeze), and the
+terminal puzzles are judged by the same two algorithms. Results are saved in **SQLite**
+by default, or in **Oracle Database through real PL/SQL stored procedures** when Oracle
+mode is on.
 
 > Everything in the game is fictional: invented places, "static fields", "relay
 > gates" and imaginary gadgets. It is an entertainment puzzle, not a guide to any
@@ -17,8 +21,19 @@ Project by **Anshul Kaushik** — MCA (AI & ML), Chandigarh University.
 
 ## 1. Features
 
-- Three missions with fixed, verified maps: **The Archive** (Easy), **The Gallery**
-  (Medium), **The Relay** (Hard).
+- Six missions with fixed, verified maps: **The Archive** (Easy), **The Gallery**
+  (Medium), **The Relay** (Hard), and the hard-puzzle missions **The Vault** (Hard),
+  **The Lab** (Expert) and **The Penthouse** (Master).
+- **Patrol drones** that move one tile per turn on fixed patrols and watch two tiles
+  ahead; being seen fails the mission. **Wait** lets a patrol pass. The planner finds
+  routes that dodge every drone, including the exact turns to wait.
+- **Keycards and locked doors**, **laser barriers** and **hacking terminals** with two
+  puzzle types: **Power Relay** (lightest path, judged by Dijkstra) and **Cargo Lock**
+  (richest load within a mass limit, judged by the Knapsack DP). Greedy answers never work.
+- Every gadget has a real power: Scanner shows next-turn drone vision, Decoy freezes all
+  drones for 3 turns, Shield survives one sighting, Lens shows the puzzle target, Repair
+  makes the first wrong answer free, Boots halve static-field cost.
+- **Pro mode**: no Plan Route, no Auto Travel; read the patrols yourself for +25% score.
 - Map, rooms, walls, special tiles, the route overlay and the character are all drawn
   with `tkinter.Canvas` shapes (no image files).
 - **Plan Route** finds the cheapest safe route (Dijkstra); **Move Next Step**,
@@ -29,24 +44,25 @@ Project by **Anshul Kaushik** — MCA (AI & ML), Chandigarh University.
   alert penalty.
 - **Relay alert**: collecting the signal key seals the relay gate; the route is
   recalculated at once (11 → 19 effort). The alert can also be triggered early.
-- Score with breakdown, rank titles, save-exactly-once, abandoned-run records.
+- Score with breakdown, rank titles, save-exactly-once, abandoned and caught records.
 - **Mission History** with statistics (current player or all players).
 - SQLite by default (zero setup). Optional Oracle mode with tables, identity keys,
   a sequence, an audit trigger, two procedures, a report procedure and a function.
-- 96 automated `unittest` tests.
+- 157 automated `unittest` tests.
 
 ## 2. Screens
 
 | Screen | What it shows |
 |---|---|
 | Main Menu | Title, story, operative-name field (validated), Start Mission, Mission History, How to Play, About Project, Exit, and a drawn facility preview. |
-| How to Play | Rules, effort, alerts, score, keyboard shortcuts. Readable without starting a mission. |
+| How to Play | Rules, effort, alerts, drones, keycards, terminals, gadget powers, Pro mode, score, keyboard shortcuts. Readable without starting a mission. |
 | About Project | Technologies, both algorithm names (credits page for the teacher), active database mode. |
-| Mission Select & Briefing | Three cards with drawn thumbnails, difficulty and a hook; the briefing shows goal, special condition, extraction and terrain. |
-| Equipment Preparation | Six gadgets with energy cost, usefulness bars (Low / Medium / High), Pack checkboxes, energy bar "Energy used: x / 8", Mission Readiness %, Suggested Kit, Begin Mission. Over-capacity ticks are refused with a friendly message. |
-| Gameplay | Map + legend on the left; sidebar with player, objective, position (e.g. "Sector C-4"), planned route ("Planned route: 9 steps, effort 13"), next direction, moves, effort, status, kit and event; buttons with correct enable/disable rules. |
+| Mission Select & Briefing | Six cards (two rows) with drawn thumbnails (red dots = drones), difficulty and a hook; the briefing shows goal, special condition, extraction and terrain. |
+| Equipment Preparation | Six gadgets with energy cost, usefulness bars (Low / Medium / High), Pack checkboxes, energy bar "Energy used: x / 8", Mission Readiness %, Suggested Kit, Pro mode switch, Begin Mission. Over-capacity ticks are refused with a friendly message. |
+| Gameplay | Map + legend on the left; sidebar with player, objective, position (e.g. "Sector C-4"), planned route ("Planned route: 9 steps, effort 13"), next direction, moves (and waits), effort, status, kit, security (keycard, lasers, drones, shield) and event; red stippled tiles show drone vision, amber outlines the Scanner's next-turn vision, amber badges the waits on the route; buttons with correct enable/disable rules. |
+| Terminal | Power Relay (6 × 6 numbered grid, click a path from IN to OUT) or Cargo Lock (7 crates, mass and credits), readout, Clue Lens hint, Submit / Clear / Back to Map. |
 | Mission Debrief | Final score and breakdown, rank, moves, effort, kit, alert, outcome sentence, save status; Play Again / Choose Another Mission / Main Menu. |
-| Mission History | Statistics tiles and a scrollable table (Player, Mission, Result, Score, Rank, Moves, Effort, Kit, Date/Time), newest first, last 100 records, "All players" toggle, Refresh, Back. |
+| Mission History | Statistics tiles and a scrollable table (Player, Mission, Result incl. "Caught" and "· PRO", Score, Rank, Moves, Effort, Kit, Date/Time), newest first, last 100 records, "All players" toggle, Refresh, Back. |
 
 Menu bar: **Game** → Main Menu / Mission History / Exit, **Help** → How to Play / About.
 
@@ -63,9 +79,12 @@ heist_planner_game\
 ├── PROGRESS.md  progress_state.json  SESSION_LOG.md   (build progress / resume files)
 ├── core\
 │   ├── config.py           paths (pathlib), constants, .env loader, logging setup
-│   ├── missions.py         the three maps, briefings, usefulness values, tile costs
+│   ├── missions.py         the six maps, drones, briefings, usefulness values, tile costs
 │   ├── gadgets.py          gadget catalogue (dictionary keyed by ID)
 │   ├── pathfinding.py      Dijkstra with heapq  -> RouteResult
+│   ├── drones.py           patrol drones: patrol cycle, facing, vision, detection
+│   ├── state_planner.py    Dijkstra on the state graph (tile, clock, keycard, freeze) + Wait
+│   ├── puzzles.py          terminal puzzles: Power Relay and Cargo Lock
 │   ├── loadout_optimizer.py 0/1 Knapsack DP     -> LoadoutResult
 │   ├── scoring.py          score constants, calculate_score(), rank_title()
 │   ├── game_engine.py      MissionRun state machine (no Tkinter inside)
@@ -77,7 +96,7 @@ heist_planner_game\
 │   ├── widgets.py          scrollable frame, capacity bar, usefulness bars, info rows
 │   ├── map_view.py         tile drawing, route overlay, character, legend, thumbnails
 │   └── menu_screen.py, info_screens.py, mission_select_screen.py, preparation_screen.py,
-│       gameplay_screen.py, debrief_screen.py, history_screen.py
+│       gameplay_screen.py, terminal_screen.py, debrief_screen.py, history_screen.py
 ├── database\
 │   ├── base_repository.py  BaseRepository (interface)
 │   ├── sqlite_repository.py, oracle_repository.py   (both inherit BaseRepository)
@@ -143,7 +162,7 @@ file delete kar sakte ho — agli baar nayi khaali file ban jaayegi.
 python -m unittest discover -s tests -v
 ```
 
-Ya `run_tests.bat` pe double-click karo. Last run: **96 tests, sab OK**.
+Ya `run_tests.bat` pe double-click karo. Last run: **157 tests, sab OK**.
 
 ## 6. Oracle mode (optional, PL/SQL)
 
@@ -236,6 +255,9 @@ Friendly error messages: server nahi mila → "Oracle server could not be reache
 | Pick up the objective (only while standing on it) | Collect Objective | `C` |
 | Move one tile by hand (walls and sealed gates refuse) | — | Arrow keys |
 | Raise the Relay alert early (Relay only, once) | Trigger Alert | — |
+| Stay on the spot for one turn (drones keep moving) | Wait | `W` |
+| Open the terminal puzzle (standing on it, lasers on) | Hack Terminal | `H` |
+| Freeze every drone for 3 turns (Signal Decoy, once) | Deploy Decoy | `D` |
 | Start again with the same kit | Restart Mission | — |
 | Leave (asks "Abandon mission?" after a move) | Return to Menu | — |
 
@@ -328,10 +350,71 @@ Other missions: Gallery → scanner + boots + repair (15 @ 8) — and because th
 in it, the best route drops from 17 to 13 (this is the link between the two algorithms).
 Relay → decoy + repair + lens (14 @ 8).
 
-### 8.3 Scoring (`core/scoring.py`)
+### 8.3 Hard missions — Dijkstra on a state graph (`core/state_planner.py`)
+
+With drones, a tile is not enough to describe "where you are": a move into tile X is safe
+at turn 4 and deadly at turn 5, and a door is a wall until you hold the keycard. So the
+planner's **vertex is a state**:
+
+```
+(row, col, drone_clock, has_key, freeze_left)
+```
+
+- **Drones are periodic** (`core/drones.py`): a ping-pong patrol of n tiles repeats every
+  2(n − 1) turns, so `position(t) = cycle[t mod period]`. After LCM(all periods) turns
+  every drone is back at the start, so the clock is stored modulo that LCM
+  (Vault 16, Lab 24, Penthouse 8).
+- **Edges** = one turn: four moves (cost of the entered tile) and **Wait** (cost 1).
+  An edge is removed if it enters a wall, a sealed tile, a locked door without the
+  keycard, an active laser, or if any drone can see the new tile after the turn (own tile
+  + 2 tiles ahead, blocked by walls/doors), or if the player and a drone swap tiles.
+- Stepping on `k` sets `has_key`. While a Decoy is active, `freeze_left` counts down and
+  the clock does not tick.
+- It is **the same Dijkstra** (heap, stale-entry skip, `previous` map), just on a graph of
+  at most 132 × 24 × 2 × 4 states. All costs stay positive. O((S + T) log S).
+- If lasers block every route, the planner routes to the terminal first.
+- **Correctness checks:** with no drones and no keycard the state planner gives exactly
+  the tile Dijkstra costs (all old missions); with drones it matches **Bellman-Ford**
+  (an O(V·E) algorithm that needs no priority queue) on every new mission, and every
+  planned path is replayed turn by turn to prove no drone ever sees it.
+
+**Mission design was verified with the planner too:** every leg of every hard mission is
+solvable, every leg needs timing (the plain shortest path would be spotted), the start is
+never watched, and a route home exists from the objective at every clock value. The
+Penthouse patrols were chosen by an exhaustive search over drone triples. One design rule
+came out of this: you can never pass a drone inside a one-tile-wide corridor that it
+patrols end to end.
+
+| Mission | Drones (period) | Suggested Kit | Planner effort | Score (guided) |
+|---|---|---|---|---|
+| Vault | 3 (LCM 16) | Scanner + Decoy (15 @ 7) | 44 | 880 |
+| Lab | 4 (LCM 24) | Decoy + Repair + Lens (20 @ 8) | 94 | 830 |
+| Penthouse | 3 (LCM 8) | Scanner + Boots + Lens (17 @ 8) | 75 | 825 |
+
+### 8.4 Terminal puzzles (`core/puzzles.py`)
+
+- **Power Relay (Lab):** a 6 × 6 grid of numbers 1–9. The player clicks a path of
+  touching cells from IN to OUT. It is accepted only if its load equals the minimum, which
+  `find_shortest_path()` computes (the start cell's own number is added, because Dijkstra
+  never charges the start).
+- **Cargo Lock (Penthouse):** 7 crates with mass 2–9 kg and worth 3–20 credits, lift limit
+  = half the total mass. Accepted only if the credits equal the maximum from
+  `recommend_loadout()`, the same DP as the Suggested Kit.
+- **No greedy shortcuts:** the generator throws away puzzles where "always step to the
+  cheaper next cell" or "always take the best credits-per-kg crate" already gives the best
+  answer — the classic reason why DAA uses Dijkstra and DP instead of greedy here.
+  Tests compare the Power Relay minimum with a brute-force DFS over all simple paths and the
+  Cargo maximum with brute force over all subsets.
+- A wrong answer is a lockout (+5 effort); Repair Module makes the first one free; Clue Lens
+  shows the target number. Each run gets a new random puzzle (fixed seeds in tests).
+
+### 8.5 Scoring (`core/scoring.py`)
 
 `500 (success) + 200 (objective) + 100 (extraction) + round(150 × chosen ÷ best)
-− 5 × effort − 50 (alert without decoy)`, never below 0.
++ high-risk bonus (Vault 150, Lab 350, Penthouse 250) − 5 × effort
+− 50 (alert without decoy)`, then **+25% in Pro mode** (only when positive), never below 0.
+The high-risk bonus balances the long routes of the drone missions. A caught run is saved
+as `CAUGHT` with score 0.
 Example: Gallery, Suggested Kit, optimal routes: effort 13 + 15 = 28 →
 500 + 200 + 100 + 150 − 140 = **810** (a test checks this; the debrief, the saved
 record and the history table show the same number).
@@ -344,14 +427,14 @@ Operative ≥ 450, Rookie below.
 |---|---|---|
 | `players` | `HP_PLAYERS` | player_id (PK, autoincrement / identity), player_name UNIQUE NOT NULL, created_at |
 | `missions` | `HP_MISSIONS` | mission_id PK ('archive' ...), mission_name, difficulty — seeded with `INSERT OR IGNORE` / `MERGE` |
-| `mission_runs` | `HP_MISSION_RUNS` | run_id PK, player_id FK, mission_id FK, result CHECK SUCCESS/ABANDONED, score CHECK ≥ 0, moves, route_cost, kit_summary, alert_triggered CHECK Y/N, played_at |
+| `mission_runs` | `HP_MISSION_RUNS` | run_id PK, player_id FK, mission_id FK, result CHECK SUCCESS/ABANDONED/CAUGHT, score CHECK ≥ 0, moves, route_cost, kit_summary, alert_triggered CHECK Y/N, played_at, pro_mode CHECK Y/N |
 | — | `HP_RUN_AUDIT` + `HP_AUDIT_SEQ` | filled by trigger `HP_TRG_RUN_AUDIT` (AFTER INSERT ... FOR EACH ROW, uses `:NEW`, `USER`, `SYSDATE`) |
 
 Relationships: one player → many runs; one mission → many runs.
 
 Oracle PL/SQL objects (`database/setup_oracle.sql`, works on 26ai and 19c):
 
-- **`HP_SAVE_RUN`** (8 IN + `p_run_id OUT`): validates input (named exceptions →
+- **`HP_SAVE_RUN`** (9 IN incl. `p_pro_mode` + `p_run_id OUT`): validates input (named exceptions →
   `RAISE_APPLICATION_ERROR -20001/-20003/-20004`), checks the mission with
   `SELECT ... INTO` + `NO_DATA_FOUND` (→ `-20002`), finds or creates the player (safe
   against the UNIQUE constraint), inserts the run with `RETURNING run_id INTO p_run_id`.
@@ -370,6 +453,12 @@ Oracle PL/SQL objects (`database/setup_oracle.sql`, works on 26ai and 19c):
    receives as a real exception.
 3. Some lines in my notes are plain sentences without `--` (e.g. "Validate minimum
    balance"), which would not compile. Every comment in the new scripts starts with `--`.
+
+**Upgrading old save files:** SQLite cannot change a CHECK constraint, so an old
+`data/heist_planner.db` (without `pro_mode` and without `CAUGHT`) is rebuilt once on start-up:
+rename the table, create the new one, copy every row, drop the old one, all in one
+transaction. In Oracle, re-running `setup_oracle.sql` recreates the tables (back up rows you
+want to keep first).
 
 Both repositories use only parameterised queries (`?` in SQLite, `:player` / `:lim` binds
 in Oracle). Player text is never concatenated into SQL.
@@ -392,9 +481,9 @@ in Oracle). Player text is never concatenated into SQL.
 python -m unittest discover -s tests -v
 ```
 
-Last result: **96 tests, OK** — pathfinding 17, missions 12, loadout optimizer 13,
-scoring 7, game engine 25, SQLite repository 11, Oracle repository (offline, fake
-connection) 7, validation 4.
+Last result: **157 tests, OK** — pathfinding 17, missions 18, loadout optimizer 13,
+scoring 10, game engine 25, hard missions 19, drones 12, state planner 10, puzzles 9,
+SQLite repository 13, Oracle repository (offline, fake connection) 7, validation 4.
 
 `tests/manual_oracle_check.py` is the real Oracle check (run by hand; it rolls back its data).
 
@@ -420,13 +509,21 @@ connection) 7, validation 4.
 | 16 | Return to Menu after moving asks "Abandon mission?"; Yes saves one ABANDONED row | ☐ |
 | 17 | About Project shows the database mode | ☐ |
 | 18 | (Oracle) `DATABASE_BACKEND=oracle` + `.env` → About shows "Oracle PL/SQL connected"; wrong password → friendly notice and SQLite fallback | ☐ |
+| 19 | Vault: drones move one tile per turn; red tiles show their vision; Plan Route shows waits (amber badges) | ☐ |
+| 20 | Vault: Wait [W] spends a turn; stepping into a red tile ends the mission ("Spotted by ...") and History shows "Caught" | ☐ |
+| 21 | Vault with Scanner: amber outlines show next-turn vision; with Decoy, [D] freezes the drones (blue) for 3 turns | ☐ |
+| 22 | Lab: the locked door refuses you until you step on the keycard; Plan Route first goes to the terminal | ☐ |
+| 23 | Lab: Hack Terminal opens the Power Relay; a wrong path costs +5 effort (free once with Repair); the Lens shows the target | ☐ |
+| 24 | Penthouse: Cargo Lock accepts only the richest load within the lift limit; lasers switch off | ☐ |
+| 25 | Pro mode: Plan Route / Auto Travel disabled; debrief shows "Pro mode bonus (+25%)"; History shows "· PRO" | ☐ |
 
 ## 13. Limitations and future work
 
 - Oracle mode was tested live on Oracle AI Database 26ai Free only (Section 6). The 19c
   compatibility of `setup_oracle.sql` comes from avoiding 23ai-only syntax; it was not run on
   a real 19c server (FreeSQL.com / college server).
-- Three fixed maps; no map editor, no enemy AI, no sound (out of scope by design).
+- Six fixed maps; drones follow fixed patrols (no chasing AI), no map editor, no sound.
+- Shield Patch gives one second chance only; the planner never plans to be seen.
 - On this laptop's 1280×720 (scaled) screen the window is sized to the screen (about 1180×630)
   instead of the planned 1180×760; all screens were checked at 1000×620.
 - Possible future work: more missions loaded from JSON, a replay of the last route, an
