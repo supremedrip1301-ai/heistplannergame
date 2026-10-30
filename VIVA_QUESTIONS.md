@@ -135,138 +135,127 @@ timing, the keycard and the terminal are really required, a route home exists at
 clock value, and my Exp 3 Union-Find shows every walkable tile is connected. The Penthouse
 patrols were chosen by an exhaustive search over drone triples.
 
-## C. Terminal puzzles and 0/1 Knapsack
+## C. The terminal puzzle (Power Relay)
 
-**23. How are the terminal puzzles related to the algorithms?**
-Power Relay is a shortest-path problem: its answer is checked with `find_shortest_path`
-(Dijkstra). Cargo Lock is a 0/1 Knapsack: its answer is checked with the DP in
-`core/loadout_optimizer.py`. The algorithms are the judges, and the player has to match
-them by hand.
+**23. How is the terminal puzzle related to Dijkstra?**
+The Power Relay is a shortest-path problem. Each numbered cell is a vertex, and its number
+is the cost of entering it. `find_shortest_path` (Dijkstra) computes the lightest load
+from IN to OUT, and the terminal accepts only a path with exactly that load. So Dijkstra is
+the judge, and the player has to match it by hand.
 
-**24. How is the Cargo Lock a Knapsack problem?**
-Crates are items (each taken at most once — "0/1"), mass is the weight, credits are the
-value, and the lift limit is the capacity.
+**24. Why is the start cell's number added to Dijkstra's answer?**
+In my cost model a step costs the tile you *enter*, so Dijkstra never charges the start.
+The puzzle counts every cell on the path, including IN, so `best = route.cost + cell(IN)`.
 
-**25. Explain the DP table.**
-`best[i][c]` is the best result using only the first `i` crates with at most `c` kg. For
-each crate: skip it (`best[i−1][c]`) or take it if it fits (`best[i−1][c − mass] +
-credits`), and keep the better one. O(n × C) time and space.
+**25. Why can't the player just use a greedy strategy?**
+The generator throws away every grid where greedy already wins (always step right or down
+to the cheaper next cell). So the player only meets grids where greedy fails — which is
+exactly why DAA uses Dijkstra and not a greedy walk for shortest paths. A test checks this
+for 20 grids of each size.
 
-**26. How do you know which crates were chosen?**
-Traceback: start at `best[n][limit]` and go up row by row. If "take crate i" still produces
-the value in the cell, crate i was taken and the capacity drops by its mass.
+**26. How do you know the puzzle answer is really the minimum?**
+A test runs a brute-force depth-first search over every simple path on small grids and
+checks it finds the same minimum as Dijkstra.
 
-**27. What is the tie-break rule?**
-Most credits first; if equal, the lower total mass; if still equal, the alphabetically
-first list of IDs. Cells store `(credits, −mass)` so tuple comparison does the first two
-rules. Example in the tests: A + D + E and A + C + E both give 15, but A + D + E weighs 7
-instead of 8, so it wins.
+**27. How are the Lab and the Penthouse puzzles different?**
+Same puzzle, different size: 6 × 6 in the Lab, 7 × 7 in the Penthouse (the Master
+mission). A bigger grid has many more possible paths, so it is harder to find the lightest
+one by eye. A wrong answer costs a lockout of +5 effort.
 
-**28. DP vs Branch and Bound vs brute force?**
-Brute force tries all 2ⁿ subsets. My Exp 6 Branch and Bound explores a tree and prunes
-branches whose fractional upper bound cannot beat the best so far — usually fast,
-exponential in the worst case. DP is O(n × C). The tests run all three on 30 Cargo puzzles
-and 200 random cases and check they agree.
-
-**29. Why can't the player just use a greedy strategy in the puzzles?**
-The generator throws away every puzzle where greedy already wins (always step to the
-cheaper next cell; always take the best credits-per-kg crate). So the player meets exactly
-the situations where greedy fails, which is why DAA uses Dijkstra and DP for these problems.
-
-**30. What happened to the Suggested Kit?**
-The first version had an equipment screen where the Knapsack DP recommended gadgets. I
-removed that screen, the gadgets and the three introductory missions to keep the game
-focused. The same DP still runs in the game — as the judge of the Cargo Lock.
+**28. What happened to the 0/1 Knapsack?**
+The first version used a Knapsack DP for a "Suggested Kit" of gadgets, and later for a
+"Cargo Lock" puzzle. I removed both so that the project is about one algorithm, Dijkstra,
+used in depth: on a tile grid, on a state graph with time and keys, and as a puzzle judge.
 
 ## D. Databases, SQL and PL/SQL
 
-**31. Why SQLite as the default?**
+**29. Why SQLite as the default?**
 It ships with Python, needs no server and stores everything in one file
 (`data/heist_planner.db`), so the game runs with zero installation.
 
-**32. Does SQLite run PL/SQL?**
+**30. Does SQLite run PL/SQL?**
 No. SQLite has no stored procedures. In SQLite mode the same rules (validation,
 find-or-create player, rank thresholds) are done in Python. PL/SQL runs only in Oracle mode.
 
-**33. What does `HP_SAVE_RUN` do?**
+**31. What does `HP_SAVE_RUN` do?**
 It validates the inputs, checks the mission exists (`SELECT ... INTO` with
 `NO_DATA_FOUND`), finds or creates the player, inserts the run and returns the new ID
 through the OUT parameter `p_run_id` (`RETURNING run_id INTO p_run_id`).
 
-**34. What is an OUT parameter and how does Python read it?**
+**32. What is an OUT parameter and how does Python read it?**
 A variable the procedure fills for the caller. In Python I create `cursor.var(int)`, pass
 it to `cursor.callproc(...)`, and read it with `.getvalue()`.
 
-**35. Function vs procedure?**
+**33. Function vs procedure?**
 A function returns a value and can be used inside SQL, like `HP_RANK_TITLE(score)` in the
 history `SELECT`. A procedure performs actions and returns results through OUT parameters,
 like `HP_SAVE_RUN` and `HP_GET_STATS`.
 
-**36. What do the trigger and sequence do?**
+**34. What do the trigger and sequence do?**
 `HP_TRG_RUN_AUDIT` fires `AFTER INSERT ... FOR EACH ROW` on `HP_MISSION_RUNS` and copies
 `:NEW.run_id`, the player, the score, `USER` and `SYSDATE` into `HP_RUN_AUDIT`, taking the
 audit ID from `HP_AUDIT_SEQ.NEXTVAL` — my Program 6 pattern, changed from UPDATE to INSERT.
 
-**37. Why does Python commit instead of the procedure?**
+**35. Why does Python commit instead of the procedure?**
 The caller owns the transaction. If the procedure committed, a later failure in the same
 operation could leave half-saved data. Python commits only after the call succeeds and
 rolls back on any exception.
 
-**38. Why `RAISE_APPLICATION_ERROR` instead of `WHEN OTHERS THEN DBMS_OUTPUT.PUT_LINE`?**
+**36. Why `RAISE_APPLICATION_ERROR` instead of `WHEN OTHERS THEN DBMS_OUTPUT.PUT_LINE`?**
 `DBMS_OUTPUT` only prints text on the server; Python would think the save worked.
 `RAISE_APPLICATION_ERROR(-20001, ...)` sends a real error that `oracledb` raises as an
 exception, which the game logs and turns into a friendly message.
 
-**39. What is Thin mode?**
+**37. What is Thin mode?**
 `python-oracledb` talks to Oracle directly in pure Python (Thin mode), so no Oracle Instant
 Client is needed. I never call `oracledb.init_oracle_client()`.
 
-**40. What is SQL injection and how do you prevent it?**
+**38. What is SQL injection and how do you prevent it?**
 If user text is glued into an SQL string, a name like `x'); DROP TABLE players; --` could
 change the command. I always use parameters (`?` in SQLite, `:player` / `:lim` in Oracle),
 so text is only ever data. A test saves exactly that name and reads it back unchanged.
 
-**41. How does the save-exactly-once rule work?**
+**39. How does the save-exactly-once rule work?**
 `MissionRun.save_once()` returns immediately if `result_saved` is already True, and sets it
 only after a successful save. A run is saved the moment it is completed or caught, and the
 debrief has no button that saves again.
 
-**42. Why are there `kit_summary` and `alert_triggered` columns if the game has no kits?**
+**40. Why are there `kit_summary` and `alert_triggered` columns if the game has no kits?**
 They come from the first version. I kept them so runs saved by that version still show in
 History and Oracle did not need to be rebuilt; new runs store `'None'` and `'N'`. The new
 `CAUGHT` result and `PRO_MODE` column were added; old SQLite files are migrated once
 (rename table, create new, copy rows, drop old) because SQLite cannot change a CHECK
 constraint.
 
-**43. What happens if Oracle is down?**
+**41. What happens if Oracle is down?**
 `database_manager.create_repository()` catches the error, logs the technical details,
 opens SQLite instead and returns a status like "Oracle unavailable — using SQLite (Oracle
 server could not be reached)". The game shows a notice and stays fully playable.
 
 ## E. Design, validation and testing
 
-**44. How is the player name validated?**
+**42. How is the player name validated?**
 `.strip()`, empty → "Agent", at most 30 characters, only letters, digits, spaces, `_`, `-`
 and `.`; otherwise an inline message is shown (`core/validation.py`).
 
-**45. Why is the game engine free of Tkinter?**
+**43. Why is the game engine free of Tkinter?**
 So every rule can be unit-tested without opening a window, and the UI stays a thin layer
 that only calls engine methods and redraws.
 
-**46. Where do you use inheritance and method overriding?**
+**44. Where do you use inheritance and method overriding?**
 `BaseScreen(ttk.Frame)` defines `on_show()`, `on_hide()`, `can_leave()`; each screen
 overrides what it needs (the gameplay screen overrides `can_leave()` to ask "Abandon
 mission?"). `BaseRepository` defines the database methods; `SQLiteRepository` and
 `OracleRepository` override them.
 
-**47. What is Pro mode and how is it scored?**
+**45. What is Pro mode and how is it scored?**
 Plan Route, Auto Travel and the next-turn preview are switched off; the player reads the
 patrols and moves with the arrow keys and Wait. Pro runs get +25% of the score (only when it
 is positive) and are stored with `pro_mode = 'Y'`.
 
-**48. How many tests are there and what do they cover?**
-125 `unittest` tests: engine, pathfinding, missions, SQLite, drones, state planner,
-puzzles, knapsack, Oracle (offline with a fake connection), scoring and validation. Run with
+**46. How many tests are there and what do they cover?**
+114 `unittest` tests: engine, pathfinding, missions, SQLite, drones, state planner,
+puzzle, Oracle (offline with a fake connection), scoring and validation. Run with
 `python -m unittest discover -s tests -v`.
 
 ---

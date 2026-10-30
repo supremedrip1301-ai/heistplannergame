@@ -10,8 +10,9 @@ Under the hood:
   is (tile, drone clock, keycard held), so the planner knows *when* to move and when to
   wait so that no drone ever sees you.
 - **Dijkstra** also judges the **Power Relay** terminal puzzle (lightest path).
-- **0/1 Knapsack (dynamic programming)** judges the **Cargo Lock** terminal puzzle
-  (richest load within a mass limit).
+
+Dijkstra is the only algorithm the game uses. Other algorithms (Bellman-Ford, my matrix
+Dijkstra, Union-Find, brute force) appear only in the tests, as independent checks.
 
 Results are saved in **SQLite** by default, or in **Oracle Database through real PL/SQL
 stored procedures** when Oracle mode is on.
@@ -30,9 +31,9 @@ Project by **Anshul Kaushik** — MCA (AI & ML), Chandigarh University.
 - **Patrol drones** move one tile per turn on fixed patrols and watch two tiles ahead;
   being seen fails the mission. **Wait** lets a patrol pass. Amber outlines preview where
   the drones will look after your next turn.
-- **Keycards and locked doors**, **laser barriers** and **hacking terminals** with two
-  puzzle types: **Power Relay** (judged by Dijkstra) and **Cargo Lock** (judged by the
-  Knapsack DP). A greedy answer never works.
+- **Keycards and locked doors**, **laser barriers** and **hacking terminals** with the
+  **Power Relay** puzzle (6 × 6 in the Lab, 7 × 7 in the Penthouse), judged by Dijkstra.
+  A greedy answer never works.
 - **Plan Route** finds the cheapest route no drone can see, including the turns to wait
   (amber badges on the map). **Move Next Step**, **Auto Travel** (animated with `after()`),
   **Stop**, arrow keys for manual moves.
@@ -44,7 +45,7 @@ Project by **Anshul Kaushik** — MCA (AI & ML), Chandigarh University.
 - **Mission History** with statistics (current player or all players).
 - SQLite by default (zero setup). Optional Oracle mode with tables, identity keys,
   a sequence, an audit trigger, two procedures, a report procedure and a function.
-- 125 automated `unittest` tests.
+- 114 automated `unittest` tests.
 
 ## 2. Screens
 
@@ -55,7 +56,7 @@ Project by **Anshul Kaushik** — MCA (AI & ML), Chandigarh University.
 | About Project | Technologies, the algorithm names (credits page for the teacher), active database mode. |
 | Mission Select & Briefing | Three cards with drawn thumbnails (red dots = drones), difficulty and a hook; the briefing shows goal, special condition, extraction and terrain; the **Pro mode** switch and **Start Mission**. |
 | Gameplay | Map + legend on the left (red stippled tiles = drone vision, amber outlines = next-turn vision, amber badges = waits on the route); sidebar with player, objective, position (e.g. "Sector C-4"), planned route ("Planned route: 25 steps (4 waits), effort 25"), next move, moves and waits, effort, status, security (keycard, lasers, drones) and event; buttons with correct enable/disable rules. |
-| Terminal | Power Relay (6 × 6 numbered grid, click a path from IN to OUT) or Cargo Lock (7 crates with mass and credits), readout, Submit / Clear / Back to Map. |
+| Terminal | Power Relay (6 × 6 or 7 × 7 numbered grid, click a path from IN to OUT), readout, Submit / Clear / Back to Map. |
 | Mission Debrief | Final score and breakdown, rank, moves (waits), effort (lockouts), mode, outcome sentence, save status; Play Again / Choose Another Mission / Main Menu. |
 | Mission History | Statistics tiles and a scrollable table (Player, Mission, Result incl. "Caught", Score, Rank, Moves, Effort, Mode, Date/Time), newest first, last 100 records, "All players" toggle, Refresh, Back. |
 
@@ -77,8 +78,7 @@ heist_planner_game\
 │   ├── drones.py           patrol drones: patrol cycle, facing, vision, detection
 │   ├── pathfinding.py      Dijkstra with heapq on a tile grid -> RouteResult
 │   ├── state_planner.py    Dijkstra on the state graph (tile, clock, keycard) + Wait
-│   ├── loadout_optimizer.py 0/1 Knapsack DP     -> LoadoutResult (Cargo Lock judge)
-│   ├── puzzles.py          terminal puzzles: Power Relay and Cargo Lock
+│   ├── puzzles.py          terminal puzzle: Power Relay (judged by Dijkstra)
 │   ├── scoring.py          score constants, calculate_score(), rank_title()
 │   ├── game_engine.py      MissionRun state machine (no Tkinter inside)
 │   └── validation.py       player-name validation
@@ -108,7 +108,7 @@ heist_planner_game\
 | Part | Technology | Standard library? |
 |---|---|---|
 | GUI | `tkinter`, `tkinter.ttk` (theme `clam`), `tkinter.Canvas`, `messagebox` | Yes |
-| Algorithms | `heapq` (Dijkstra), plain lists (DP table), `math.gcd` (LCM of patrols) | Yes |
+| Algorithms | `heapq` (Dijkstra), `math.gcd` (LCM of patrols) | Yes |
 | Data / state | `dataclasses`, classes, dictionaries, sets, tuples | Yes |
 | Local save | `sqlite3` | Yes |
 | Paths, logs, config | `pathlib`, `logging`, own tiny `.env` loader | Yes |
@@ -158,7 +158,7 @@ file delete kar sakte ho — agli baar nayi khaali file ban jaayegi.
 python -m unittest discover -s tests -v
 ```
 
-Ya `run_tests.bat` pe double-click karo. Last run: **125 tests, sab OK**.
+Ya `run_tests.bat` pe double-click karo. Last run: **114 tests, sab OK**.
 
 ## 6. Oracle mode (optional, PL/SQL)
 
@@ -335,55 +335,23 @@ inside a one-tile-wide corridor that it patrols end to end.
 | Lab | 4 (24) | start→terminal 52 (2) / 52 · →prototype 22 (2) / 22 · →exit 20 (2) / 20 | 30 · 16 · 14 | 94 | 830 |
 | Penthouse | 3 (8) | start→terminal 25 (2) / 31 · →safe 32 (0) / 44 · →exit 10 (1) / 16 | 29 · 22 · 15 | 91 | 845 |
 
-### 8.3 Terminal puzzles (`core/puzzles.py`)
+### 8.3 Terminal puzzle — Power Relay (`core/puzzles.py`)
 
-- **Power Relay (Lab) — Dijkstra:** a 6 × 6 grid of numbers 1–9. The player clicks a path
-  of touching cells from IN to OUT. It is accepted only if its load equals the minimum,
-  which `find_shortest_path()` computes (the start cell's own number is added, because
-  Dijkstra never charges the start).
-- **Cargo Lock (Penthouse) — 0/1 Knapsack DP:** 7 crates with mass 2–9 kg and worth 3–20
-  credits, lift limit = half the total mass. Accepted only if the credits equal the
-  maximum from `recommend_loadout()` (`core/loadout_optimizer.py`).
-- **No greedy shortcuts:** the generator throws away puzzles where "always step to the
-  cheaper next cell" or "always take the best credits-per-kg crate" already gives the best
-  answer — the classic reason why DAA uses Dijkstra and DP instead of greedy. Tests compare
-  the Power Relay minimum with a brute-force DFS over all simple paths and the Cargo maximum
-  with brute force over all subsets.
-- A wrong answer is a lockout (+5 effort). Each run gets a new random puzzle (fixed seeds in
+- A grid of numbers 1–9: **6 × 6 in the Lab, 7 × 7 in the Penthouse**. The player clicks a
+  path of touching cells from IN (top-left) to OUT (bottom-right). The path's load is the
+  sum of its cells.
+- **Dijkstra is the judge:** each cell is a vertex and its number is the cost of entering
+  it, so the minimum load is exactly `find_shortest_path()` on the grid (plus the start
+  cell's own number, because Dijkstra never charges the start). Only a path with exactly
+  that load is accepted.
+- **No greedy shortcut:** the generator throws away grids where "always step right or down
+  to the cheaper next cell" already gives the minimum — the classic reason why DAA uses
+  Dijkstra instead of a greedy walk. Tests compare the minimum with a brute-force DFS over
+  all simple paths.
+- A wrong answer is a lockout (+5 effort). Each run gets a new random grid (fixed seeds in
   tests).
 
-### 8.4 0/1 Knapsack DP (`core/loadout_optimizer.py`)
-
-- **Mapping:** item = crate (taken at most once → "0/1"), weight = **mass**, value =
-  **credits**, capacity = **lift limit**.
-- **Table:** `best[i][c]` = best result using only the first `i` crates with at most `c`
-  kg. Recurrence: skip crate `i` → `best[i-1][c]`; take it (if it fits) →
-  `best[i-1][c-mass] + credits`. Each cell stores the pair `(credits, -mass)`, compared like
-  tuples.
-- **Traceback:** start at `best[n][limit]` and walk up the rows: if taking crate `i` still
-  reaches the cell's value, it was taken and the remaining capacity drops by its mass.
-- **Tie-break (tested):** (1) most credits, (2) then the **lower total mass**, (3) then the
-  alphabetically first sorted ID tuple.
-- **Complexity:** O(n × C). Brute force is O(2ⁿ); my Experiment 6 Branch and Bound is also
-  exponential in the worst case but prunes with a fractional bound.
-
-**Worked example** (from `tests/test_loadout_optimizer.py`, limit 8): A (3 kg, 6 cr),
-B (4, 3), C (3, 2), D (2, 2), E (2, 7), F (5, 3). Value-only DP table:
-
-| i (item added) | c=0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
-|---|---|---|---|---|---|---|---|---|---|
-| 0 (none) | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 1 A (3, 6) | 0 | 0 | 0 | 6 | 6 | 6 | 6 | 6 | 6 |
-| 2 B (4, 3) | 0 | 0 | 0 | 6 | 6 | 6 | 6 | 9 | 9 |
-| 3 C (3, 2) | 0 | 0 | 0 | 6 | 6 | 6 | 8 | 9 | 9 |
-| 4 D (2, 2) | 0 | 0 | 2 | 6 | 6 | 8 | 8 | 9 | 10 |
-| 5 E (2, 7) | 0 | 0 | 7 | 7 | 9 | 13 | 13 | **15** | **15** |
-| 6 F (5, 3) | 0 | 0 | 7 | 7 | 9 | 13 | 13 | 15 | **15** |
-
-The best worth is **15**, already reached with only **7** kg (`best[6][7] = 15`). Two loads
-give 15: **A + D + E (7 kg)** and **A + C + E (8 kg)**; the tie-break picks the lighter one.
-
-### 8.5 Scoring (`core/scoring.py`)
+### 8.4 Scoring (`core/scoring.py`)
 
 `500 (success) + 200 (objective) + 100 (extraction) + high-risk bonus (Vault 300, Lab 500,
 Penthouse 500) − 5 × effort`, then **+25% in Pro mode** (only when positive), never below 0.
@@ -444,7 +412,7 @@ in Oracle). Player text is never concatenated into SQL.
 | Worksheet / notes | Used in the game as |
 |---|---|
 | DAA Exp 4 — Dijkstra (matrix, O(V²)) | Game uses heap versions (tile graph and state graph). The matrix version is kept as `dijkstra_matrix()` in `tests/reference_algorithms.py`, with the **indentation bug fixed** (the break / visited / relaxation lines were inside the min-search loop, and the `new_distance` check was not under `graph[current][v] > 0`). A test compares both versions on every pair of tiles of the test grids and the mission maps. |
-| DAA Exp 6 — 0/1 Knapsack Branch & Bound | Game uses DP (Cargo Lock judge). My `knapsack_bb()` is copied unchanged (only formatting) into the tests; DP, B&B and brute force must agree on 30 Cargo puzzles and 200 random cases. |
+| DAA Exp 6 — 0/1 Knapsack Branch & Bound | Not used: the game has no Knapsack problem any more (it was removed on my decision on 30 Oct 2026 so the project is about Dijkstra only). |
 | DAA Exp 3 — Kruskal's Union-Find | My `find()` (path compression) and `union()` (by rank) prove every walkable tile of each mission is in one connected group. |
 | DAA Exp 1 — timing with `perf_counter()` | Optional `tools/benchmark_routes.py`: heap vs matrix Dijkstra on growing random grids; a Matplotlib line graph only if Matplotlib is installed, otherwise a table. At about 1000 tiles: heap 2.9 ms, matrix 86.5 ms, same costs. |
 | Python worksheets 1–5, slides 1.x | Classes with `__init__`, dictionary keyed by ID with `in` checks (missions), `.strip()` + default + range checks (player name), tuples for positions, sets for watched tiles, default arguments, docstrings, inheritance + overriding (`BaseScreen`, `BaseRepository`). |
@@ -457,9 +425,9 @@ in Oracle). Player text is never concatenated into SQL.
 python -m unittest discover -s tests -v
 ```
 
-Last result: **125 tests, OK** — game engine 26, pathfinding 18, missions 13, SQLite
-repository 13, drones 11, state planner 9, puzzles 9, loadout optimizer 9, Oracle repository
-(offline, fake connection) 7, scoring 6, validation 4.
+Last result: **114 tests, OK** — game engine 26, pathfinding 18, missions 13, SQLite
+repository 13, drones 11, state planner 9, puzzles 7, Oracle repository (offline, fake
+connection) 7, scoring 6, validation 4.
 
 `tests/manual_oracle_check.py` is the real Oracle check (run by hand; it rolls back its data).
 
@@ -479,7 +447,7 @@ repository 13, drones 11, state planner 9, puzzles 9, loadout optimizer 9, Oracl
 | 10 | Vault with the planner's route finishes with 880 (Phantom); History shows it exactly once | ☐ |
 | 11 | Lab: the locked door refuses you until you step on the keycard; Plan Route first goes to the terminal | ☐ |
 | 12 | Lab: Hack Terminal opens the Power Relay; a wrong path costs +5 effort; the right one switches the laser off | ☐ |
-| 13 | Penthouse: the Cargo Lock accepts only the richest load within the lift limit | ☐ |
+| 13 | Penthouse: the terminal is a 7 × 7 Power Relay; only the lightest path switches the lasers off | ☐ |
 | 14 | Pro mode: Plan Route / Auto Travel / preview are off; debrief shows "Pro mode bonus (+25%)"; History shows "Pro" | ☐ |
 | 15 | Restart Mission resets moves, effort, drones, keycard and lasers | ☐ |
 | 16 | Return to Menu after moving asks "Abandon mission?"; Yes saves one ABANDONED row | ☐ |

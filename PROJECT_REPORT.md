@@ -9,9 +9,8 @@
 ## 1. Aim
 
 To design and build a desktop stealth-puzzle game in Python Tkinter in which classic
-algorithms run inside the gameplay and decide what happens: **Dijkstra's shortest path**
-(on a tile graph and on a state graph) plans every safe route, and judges the Power Relay
-puzzle, and the **0/1 Knapsack problem (dynamic programming)** judges the Cargo Lock
+algorithm runs inside the gameplay and decides what happens: **Dijkstra's shortest path**
+(on a tile graph and on a state graph) plans every safe route and judges the Power Relay
 puzzle. Results are stored in SQLite and, optionally, in Oracle Database through PL/SQL
 stored procedures.
 
@@ -29,8 +28,8 @@ exactly which algorithm runs and why it is correct.
    step-by-step and animated movement, objective collection and extraction.
 2. Model patrol drones that move every turn, and plan routes that are never seen, by
    running Dijkstra on a state graph (tile, drone clock, keycard).
-3. Use Dijkstra and the 0/1 Knapsack DP as the judges of two terminal puzzles, built so
-   that a greedy answer never works.
+3. Use Dijkstra as the judge of the terminal puzzle, built so that a greedy answer never
+   works.
 4. Keep the game logic independent from the UI and from the database.
 5. Save results exactly once in SQLite; provide a genuine Oracle PL/SQL backend with an
    automatic fallback to SQLite.
@@ -40,7 +39,7 @@ exactly which algorithm runs and why it is correct.
 ## 4. Scope
 
 **In scope:** single player, three fixed maps (12 columns, 11 rows), ten deterministic patrol
-drones, keycards, locked doors, laser barriers, two terminal puzzle types, Pro mode, scoring
+drones, keycards, locked doors, laser barriers, a terminal puzzle, Pro mode, scoring
 and ranks, history and statistics, SQLite (default) and Oracle (optional) storage.
 **Out of scope (by design):** chasing / learning enemy AI, multiplayer, accounts, sound,
 images, internet, third-party game engines.
@@ -48,8 +47,10 @@ images, internet, third-party game engines.
 **Scope change (30 Oct 2026):** the first version also had three introductory missions
 (Archive, Gallery, Relay), an equipment-preparation screen with a Knapsack-based "Suggested
 Kit", and gadgets. On my decision these were removed to keep the game focused on the three
-puzzle missions. The three old maps are kept as test grids for the Dijkstra tests, and the
-Knapsack DP is still used, now as the judge of the Cargo Lock puzzle.
+puzzle missions. The three old maps are kept as test grids for the Dijkstra tests. Later
+the same day the remaining Knapsack use (a "Cargo Lock" puzzle in the Penthouse) was also
+removed, so that **Dijkstra is the only algorithm in the game**; the Penthouse terminal is
+now a 7 × 7 Power Relay.
 
 ## 5. Features
 
@@ -60,7 +61,7 @@ Knapsack DP is still used, now as the judge of the Cargo Lock puzzle.
   W / C / H and arrow keys.
 - Patrol drones with drawn vision cones and an amber preview of the next turn; caught runs
   fail and are recorded as CAUGHT.
-- Keycards and locked doors, laser barriers, terminals with Power Relay and Cargo Lock puzzles.
+- Keycards and locked doors, laser barriers, terminals with the Power Relay puzzle (6 × 6 / 7 × 7).
 - Pro mode: no route guidance and no preview, +25% score.
 - Debrief with score breakdown and rank; save-exactly-once; abandoned runs recorded.
 - Mission history with statistics (player / all players).
@@ -86,7 +87,7 @@ in Thin mode.
       │   ├── state_planner (Dijkstra on states)  │   │   ├── SQLiteRepository    │──► data/heist_planner.db
       │   │     └── drones (patrols, vision)      │   │   └── OracleRepository    │──► HP_SAVE_RUN, HP_GET_STATS,
       │   ├── puzzles ── pathfinding (Dijkstra)   │   │ database_manager (fallback)│    HP_RANK_TITLE (PL/SQL)
-      │   │          └── loadout_optimizer (DP)   │   └───────────────────────────┘
+      │   │                                       │   └───────────────────────────┘
       │   ├── scoring  (score, ranks)             │
       │   └── missions (maps, drones, briefings)  │
       └───────────────────────────────────────────┘
@@ -118,14 +119,13 @@ Tkinter and scoring only receives numbers, so each part can be tested alone.
 - Checked against the tile Dijkstra (no drones: identical costs) and Bellman-Ford (with
   drones: identical costs); every planned path is replayed to prove it is never seen.
 
-### 8.3 Terminal puzzles
+### 8.3 Terminal puzzle
 
-- **Power Relay:** the minimum path load in a 6 × 6 grid, computed with `find_shortest_path`;
-  cross-checked by a brute-force DFS over all simple paths.
-- **Cargo Lock:** the maximum credits within a mass limit, computed with the 0/1 Knapsack DP
-  (`best[i][c]` of pairs `(credits, −mass)`, traceback, documented tie-break); cross-checked
-  by brute force over all subsets and my Branch and Bound (Exp 6).
-- Puzzles where a greedy choice already gives the best answer are rejected by the generator.
+- **Power Relay:** the minimum path load in a 6 × 6 (Lab) or 7 × 7 (Penthouse) grid of
+  numbers, computed with `find_shortest_path` (each cell is a vertex, its number the cost of
+  entering it); cross-checked by a brute-force DFS over all simple paths.
+- Grids where a greedy walk (always the cheaper next cell) already gives the minimum are
+  rejected by the generator.
 
 ### 8.4 State machine
 
@@ -175,6 +175,8 @@ transaction has one clear owner.
    search over drone triples), Pro mode, CAUGHT / PRO_MODE in both databases.
 3. Phase 9 (30 Oct 2026) — focus on the three puzzle missions: preparation screen, gadgets
    and the first three missions removed; tests and documents updated; Oracle re-checked live.
+4. Phase 10 (30 Oct 2026) — Dijkstra only: the 0/1 Knapsack and the Cargo Lock removed; the
+   Penthouse terminal became a 7 × 7 Power Relay.
 
 Progress was checkpointed after every task in `PROGRESS.md`, `progress_state.json` and
 `SESSION_LOG.md`, with a git commit after each phase.
@@ -182,7 +184,7 @@ Progress was checkpointed after every task in `PROGRESS.md`, `progress_state.jso
 ## 11. Output / testing results
 
 **Automated tests** (`python -m unittest discover -s tests -v`, last run 30 Oct 2026):
-**125 tests, 0 failures, 0 errors.**
+**114 tests, 0 failures, 0 errors.**
 
 | Test file | Tests | What it proves |
 |---|---|---|
@@ -192,8 +194,7 @@ Progress was checkpointed after every task in `PROGRESS.md`, `progress_state.jso
 | test_sqlite_repository | 13 | fresh DB zeros, save → history → stats, filters, restart persistence, invalid rows rejected, injection text stored safely, engine save path saves once, CAUGHT + pro_mode, old save file upgraded, fallback |
 | test_drones | 11 | patrol cycles, facing, vision blocked by walls/doors, detection incl. swap |
 | test_state_planner | 9 | = tile Dijkstra without drones, = Bellman-Ford with drones and keycards, waits, no-route |
-| test_puzzles | 9 | Power Relay = brute-force DFS, Cargo = brute force, greedy always beaten, bad answers rejected |
-| test_loadout_optimizer | 9 | worked example and tie-break, capacity rules, edge cases, DP = brute force = Branch & Bound (200 random cases + 30 Cargo puzzles) |
+| test_puzzles | 7 | Power Relay: 6 × 6 and 7 × 7 grids, minimum = brute-force DFS, greedy always beaten, bad answers rejected |
 | test_oracle_repository | 7 | (offline, fake connection) callproc arguments, commit / rollback, stats, friendly errors, SYS/SYSTEM refused |
 | test_scoring | 6 | Vault example 880, clamp at 0, Pro bonus, rank thresholds |
 | test_validation | 4 | player-name rules |
@@ -202,7 +203,8 @@ Progress was checkpointed after every task in `PROGRESS.md`, `progress_state.jso
 **830**; Penthouse effort 91 → **845** (all Phantom).
 
 **Live runs of the real window** (scripted, on this laptop, 1180 × 630 and 1000 × 620):
-Vault 880 with Play Again; Lab 830 through the keycard and the Power Relay terminal; a
+Vault 880 with Play Again; Lab 830 through the keycard and the 6 × 6 Power Relay;
+Penthouse 845 through the 7 × 7 Power Relay; a
 Pro-mode Penthouse run walking the plain path was spotted by the "Atrium guard" and saved
 once as CAUGHT; History showed all three runs with the right mode.
 
@@ -228,10 +230,8 @@ leaderboard view.
 - That "where am I" can mean more than a position: adding time and keys to the vertex turns
   a hard timing puzzle into an ordinary shortest-path problem.
 - Why a heap beats a linear scan on sparse graphs, and how to rebuild the path.
-- How a DP table plus traceback answers "which items", not just "how much", and how to make
-  ties deterministic.
-- Why greedy fails for shortest paths and knapsack — shown by puzzles built so that the
-  greedy answer is always wrong.
+- Why a greedy walk fails for shortest paths — shown by puzzles built so that the greedy
+  answer is always wrong.
 - Event-driven GUI programming: `after()` instead of `sleep()`, cancelling callbacks,
   keeping state in one engine object.
 - Clean separation of UI, logic and storage through inheritance (`BaseScreen`,
@@ -243,7 +243,7 @@ leaderboard view.
 
 The project delivers a complete, playable Tkinter puzzle game in which Dijkstra really
 drives the gameplay: on a state graph of (tile, drone clock, keycard) it finds routes that
-dodge every patrol drone, waiting exactly when needed. Dijkstra and the 0/1 Knapsack DP
-also judge the terminal puzzles, which are built so that greedy answers fail. The game runs
+dodge every patrol drone, waiting exactly when needed. Dijkstra also judges the
+terminal puzzle, which is built so that a greedy answer fails. The game runs
 with zero installs in SQLite mode, has a genuine PL/SQL backend for Oracle, and is backed
-by 125 passing tests that cross-check my own worksheet algorithms and Bellman-Ford.
+by 114 passing tests that cross-check my own worksheet algorithms and Bellman-Ford.
