@@ -70,8 +70,7 @@ Menu bar: **Game** → Main Menu / Mission History / Exit, **Help** → How to P
 
 ```
 heist_planner_game\
-├── app.py                  start the game (logging, config, repository, window, mainloop)
-├── run_game.bat            double-click to play
+├── app.py                  start the game: python app.py (logging, config, repository, window)
 ├── run_tests.bat           double-click to run all tests
 ├── requirements.txt        nothing needed for SQLite; oracledb optional
 ├── .env.example            copy to .env for Oracle mode (.env is git-ignored)
@@ -149,7 +148,11 @@ Ek chhoti si test window khulni chahiye. Agar khul gayi, to Tkinter theek hai �
 python app.py
 ```
 
-Ya phir `run_game.bat` pe double-click kar do. Kisi `pip install` ki zaroorat nahi hai.
+Terminal hamesha project folder (`D:\DAA\heist_planner_game`) mein khulna chahiye. Agar
+terminal kisi aur folder mein hai, to pehle `cd /d D:\DAA\heist_planner_game` likho, ya
+seedha poora path do: `python D:\DAA\heist_planner_game\app.py` (yeh bhi chalega, kyunki
+saare paths `pathlib` se project folder ke hisaab se bante hain). Kisi `pip install` ki
+zaroorat nahi hai.
 
 **Save file kahan hai?** Pehli baar chalane pe game khud `data\heist_planner.db` (SQLite
 file) bana deta hai. Saare results isi file mein save hote hain aur game band karke

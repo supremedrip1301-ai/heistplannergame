@@ -302,7 +302,7 @@ change a CHECK constraint.
 
 ## 5-minute demo script
 
-1. **Start** — double-click `run_game.bat`. Type your name, show the inline validation with
+1. **Start** — open a terminal in `D:\DAA\heist_planner_game` and run `python app.py`. Type your name, show the inline validation with
    `a<b>`, then a proper name. (20 s)
 2. **Gallery without boots** — Start Mission → The Gallery → Start Preparation → Begin
    Mission with an empty kit (confirm). Press **P**: "Planned route: 17 steps, effort 17" —
