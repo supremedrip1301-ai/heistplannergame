@@ -63,6 +63,29 @@ class PowerRelayPuzzle:
     def load(self, cells) -> int:
         return sum(self.cell(pos) for pos in cells)
 
+    def best_from(self, cells):
+        """Lightest total load still possible if the player continues this path.
+
+        This is the Relay Monitor: Dijkstra runs again from the END of the
+        player's path to OUT, with the cells already used blocked (a path may
+        not visit a cell twice), and its cost is added to the load so far.
+        Returns None when the path is broken or boxed in (OUT unreachable).
+        """
+        if not cells:
+            return self.best
+        if cells[0] != self.start:
+            return None
+        end = cells[-1]
+        rest = find_shortest_path(self.grid, end, self.goal, DIGIT_COSTS,
+                                  blocked=frozenset(cells[:-1]))
+        if not rest.found:
+            return None
+        return self.load(cells) + rest.cost
+
+    def on_track(self, cells) -> bool:
+        """True while this path can still be finished with the lightest load."""
+        return self.best_from(cells) == self.best
+
     def check(self, cells) -> tuple:
         """(solved, message) for the cells the player selected, in order."""
         if not cells or cells[0] != self.start or cells[-1] != self.goal:

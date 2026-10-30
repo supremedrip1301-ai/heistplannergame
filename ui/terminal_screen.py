@@ -2,6 +2,10 @@
 
 Click touching cells from IN to OUT; the load must be the lowest possible
 (the engine checks it with Dijkstra).
+
+Relay Monitor: after every click, Dijkstra runs again from the end of the
+player's path to OUT (PowerRelayPuzzle.best_from) and the monitor says
+whether the path can still reach the lightest load. Off in Pro mode.
 """
 
 import tkinter as tk
@@ -53,10 +57,10 @@ class TerminalScreen(BaseScreen):
         self.readout = ttk.Label(side, text="", style="PanelValue.TLabel",
                                  font=styles.font(14, "bold"), wraplength=270, justify="left")
         self.readout.grid(row=1, column=0, sticky="w", pady=(8, 4))
-        self.hint = ttk.Label(side, text="Only the best possible answer works.",
-                              style="PanelAccent.TLabel", wraplength=270,
-                              justify="left")
-        self.hint.grid(row=2, column=0, sticky="w", pady=(4, 4))
+        # Relay Monitor line (green = on track, red = off track).
+        self.monitor = ttk.Label(side, text="", style="PanelDim.TLabel", wraplength=270,
+                                 justify="left")
+        self.monitor.grid(row=2, column=0, sticky="w", pady=(4, 4))
         self.message = ttk.Label(side, text="", style="PanelDim.TLabel", wraplength=270,
                                  justify="left")
         self.message.grid(row=3, column=0, sticky="w", pady=(8, 4))
@@ -177,11 +181,39 @@ class TerminalScreen(BaseScreen):
         if self.path and self.path[-1] == puzzle.goal:
             text += "  (path complete)"
         self.readout.configure(text=text)
+        self.update_monitor()
         run = self.app.run
         if run is not None and run.wrong_answers:
             self.lockouts.configure(text=f"Wrong answers so far: {run.wrong_answers}")
         else:
             self.lockouts.configure(text="A wrong answer costs a lockout (+5 effort).")
+
+    def update_monitor(self) -> None:
+        """Ask the puzzle (Dijkstra from the end of the path) how the path is doing."""
+        puzzle = self.puzzle
+        run = self.app.run
+        if run is not None and run.pro_mode:
+            self.monitor.configure(text="Relay Monitor offline (Pro mode).",
+                                   style="PanelDim.TLabel")
+            return
+        if not self.path:
+            self.monitor.configure(text="Relay Monitor: start at IN (top-left).",
+                                   style="PanelDim.TLabel")
+            return
+        best_here = puzzle.best_from(self.path)
+        if best_here is None:
+            self.monitor.configure(text="Relay Monitor: DEAD END — OUT cannot be reached from "
+                                        "here. Take back some cells.", style="PanelAlert.TLabel")
+        elif best_here == puzzle.best and self.path[-1] == puzzle.goal:
+            self.monitor.configure(text="Relay Monitor: lightest path found — Submit!",
+                                   style="PanelGood.TLabel")
+        elif best_here == puzzle.best:
+            self.monitor.configure(text="Relay Monitor: ON TRACK — this path can still reach "
+                                        "the lightest load.", style="PanelGood.TLabel")
+        else:
+            self.monitor.configure(text=f"Relay Monitor: OFF TRACK — the best this path can "
+                                        f"still reach is {best_here}. Take back some cells.",
+                                   style="PanelAlert.TLabel")
 
     # ------------------------------------------------------------ buttons
     def submit(self) -> None:

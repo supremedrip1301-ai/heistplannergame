@@ -31,7 +31,9 @@ HOW_TO_PLAY = [
      "A locked door opens only once you have walked over the keycard. Laser barriers stay "
      "on until you hack the terminal [H]. The terminal is a Power Relay: draw the lightest "
      "path of numbered cells from IN to OUT (6 x 6 in the Lab, 7 x 7 in the Penthouse). "
-     "Only the lightest possible path works; a wrong answer is a lockout (+5 effort)."),
+     "Only the lightest possible path works; a wrong answer is a lockout (+5 effort). "
+     "The Relay Monitor checks your path after every click: ON TRACK (green) means it can "
+     "still reach the lightest load, OFF TRACK (red) means take back some cells."),
     ("5. Collect and extract",
      "Stand on the objective and press Collect Objective. Your target switches to the "
      "extraction point: plan again and get out."),
@@ -128,7 +130,10 @@ class AboutScreen(TextPage):
              "the number is the cost of entering it. Dijkstra computes the minimum load, and "
              "only a path with exactly that load is accepted. Grids where a greedy walk "
              "(always the cheaper next cell) would already win are thrown away, so the player "
-             "has to plan. Tests cross-check the answer with a brute-force search."),
+             "has to plan. The Relay Monitor runs Dijkstra again after every click, from the end "
+             "of the player's path to OUT (cells already used are blocked): load so far + that "
+             "shortest remaining cost = the best this path can still reach. If it equals the "
+             "minimum the player is on track."),
             ("Technologies",
              "Python 3 standard library: tkinter / ttk / Canvas (all graphics are drawn "
              "shapes), heapq, dataclasses, sqlite3, json, logging, pathlib, unittest.\n"
