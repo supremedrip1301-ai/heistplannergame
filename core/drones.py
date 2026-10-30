@@ -112,8 +112,7 @@ def watched_tiles(drones, t: int, grid) -> set:
 def is_detected(drones, grid, old_pos, new_pos, old_t: int, new_t: int) -> bool:
     """True if the player is spotted after moving old_pos -> new_pos.
 
-    old_t / new_t are the drone clock before and after the turn (they are
-    equal while a Signal Decoy keeps the drones frozen).
+    old_t / new_t are the drone clock before and after the turn.
     """
     for drone in drones:
         if new_pos in drone.vision(new_t, grid):

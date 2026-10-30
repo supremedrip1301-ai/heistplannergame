@@ -3,17 +3,17 @@
 import tkinter as tk
 from tkinter import ttk
 
-from core.missions import MISSIONS
+from core.missions import MISSIONS, build_tile_costs
+from core.state_planner import PlanContext, plan_state_route
 from core.validation import validate_player_name
 from ui import styles
 from ui.base_screen import BaseScreen
 from ui.map_view import draw_mini_map
 
 STORY = ("The Meridian Consortium hides its secrets inside impossible facilities: "
-         "archives that rearrange themselves, galleries humming with static, relays that "
-         "seal shut at the first alarm. You are the planner. Pick a mission, pack a kit "
-         "that fits your energy budget, chart the safest route and bring your operative "
-         "home.")
+         "a vault swept by patrol drones, a lab sealed behind keycards and lasers, a "
+         "penthouse guarded by all of it at once. You are the planner. Time every move, "
+         "crack the terminals, and bring your operative home unseen.")
 
 
 class MenuScreen(BaseScreen):
@@ -82,7 +82,7 @@ class MenuScreen(BaseScreen):
         self.preview = tk.Canvas(right, bg=styles.PANEL, highlightthickness=0, bd=0)
         self.preview.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
         self.preview.bind("<Configure>", lambda e: self.draw_preview())
-        ttk.Label(right, text="Three facilities. One energy budget. Every route counts.",
+        ttk.Label(right, text="Three facilities. Ten patrol drones. Every turn counts.",
                   style="PanelDim.TLabel", wraplength=300).grid(row=2, column=0, sticky="w",
                                                                 pady=(10, 0))
 
@@ -90,16 +90,19 @@ class MenuScreen(BaseScreen):
         self.story.configure(wraplength=max(300, min(620, event.width - 80)))
 
     def draw_preview(self) -> None:
-        """Mini map of the Relay with a sample route drawn on top."""
+        """Mini map of the Vault with its drones and a sample route drawn on top."""
         canvas = self.preview
         canvas.delete("all")
-        grid = MISSIONS["relay"].grid
+        vault = MISSIONS["vault"]
+        grid = vault.grid
         width, height = canvas.winfo_width(), canvas.winfo_height()
         tile = max(6, min((width - 4) // len(grid[0]), (height - 4) // len(grid)))
         ox = (width - tile * len(grid[0])) // 2
         oy = (height - tile * len(grid)) // 2
-        draw_mini_map(canvas, grid, tile, ox, oy)
-        sample = [(1, 1), (1, 4), (3, 4), (3, 6), (5, 6), (5, 8), (3, 8)]
+        draw_mini_map(canvas, grid, tile, ox, oy, drones=vault.drones)
+        # The real safe route of the planner (it dodges every drone).
+        ctx = PlanContext(grid, build_tile_costs(), vault.drones)
+        sample = plan_state_route(ctx, vault.start, vault.objective).path
         points = []
         for r, c in sample:
             points.extend([ox + c * tile + tile / 2, oy + r * tile + tile / 2])

@@ -3,65 +3,51 @@
 import tkinter as tk
 from tkinter import ttk
 
-from core import config
 from ui import styles
 from ui.base_screen import BaseScreen
 
 HOW_TO_PLAY = [
     ("The goal",
      "Guide your operative to the objective, collect it, then reach the extraction "
-     "point. A mission is only complete when you extract WITH the objective."),
+     "point - without being seen. A mission is only complete when you extract WITH the "
+     "objective."),
     ("1. Choose a mission",
-     "Pick one of three facilities. Read the briefing: it tells you what makes the "
-     "map special."),
-    ("2. Pack your kit",
-     f"You have {config.KIT_CAPACITY} energy units. Tick gadgets to pack them. "
-     "Press Suggested Kit to let your planner pick the most useful kit that fits; you can "
-     "still change it. Mission Readiness shows how good your kit is for this mission."),
+     "The Vault (Hard), the Lab (Expert) or the Penthouse (Master). Read the briefing: it "
+     "tells you what guards the map. Tick Pro mode if you want no help at all."),
+    ("2. Patrol drones",
+     "Every move or Wait is one turn, and after each turn every drone moves one tile "
+     "along its fixed patrol. A drone sees its own tile and two tiles ahead (red tiles); "
+     "walls and locked doors block its view. Stand in a red tile, or walk through a "
+     "drone, and you are caught: the mission fails. Amber outlines show where the drones "
+     "will look after your next turn. Wait [W] lets a patrol pass."),
     ("3. Plan and move",
-     "Plan Route draws the cheapest safe route to your current target. Move Next Step "
-     "walks one tile; Auto Travel walks the whole route; Stop pauses it."),
+     "Plan Route draws the cheapest route that no drone can see, including the turns "
+     "you must wait (amber number badges). Move Next Step walks one turn; Auto Travel walks "
+     "the whole route; Stop pauses it. Arrow keys move one tile by hand."),
     ("Effort",
-     "Each floor tile costs 1 effort. Static fields cost 4 (only 2 with Mobility Boots). "
+     "Each floor tile costs 1 effort, each Wait costs 1, and static fields cost 4. "
      "The planner always looks for the lowest total effort, not just the fewest steps."),
-    ("4. Collect and extract",
-     "Stand on the objective and press Collect Objective. Your target switches to the "
-     "extraction point: plan again and get out."),
-    ("Alerts",
-     "In the Relay, taking the signal key raises an alert that seals the relay gate. "
-     "Your route is recalculated at once. You can also trigger the alert early. "
-     "A Pocket Scanner reveals the weak gate in advance; a Signal Decoy cancels the "
-     "alert penalty."),
-    ("Hard missions: patrol drones",
-     "The Vault, the Lab and the Penthouse are guarded by drones. Every move or Wait is "
-     "one turn, and after each turn every drone moves one tile along its fixed patrol. "
-     "A drone sees its own tile and two tiles ahead (red tiles). Walls and locked doors "
-     "block its view. Stand in a red tile, or walk through a drone, and you are caught: "
-     "the mission fails. Wait [W] lets a patrol pass."),
-    ("Keycards, doors and terminals",
+    ("4. Keycards, doors and terminals",
      "A locked door opens only once you have walked over the keycard. Laser barriers stay "
      "on until you hack the terminal [H]. Terminal puzzles: Power Relay (draw the lightest "
      "path of numbered cells from IN to OUT) and Cargo Lock (load the lift with the most "
      "credits without passing the mass limit). Only the best possible answer works; a wrong "
      "answer is a lockout (+5 effort)."),
-    ("Gadget powers",
-     "Pocket Scanner: amber outlines show where drones will look next turn. "
-     "Signal Decoy [D]: freezes every drone for 3 turns, once. Shield Patch: survive one "
-     "sighting. Clue Lens: shows the target answer at terminals. Repair Module: the first "
-     "wrong terminal answer is free. Mobility Boots: static fields cost 2 instead of 4."),
+    ("5. Collect and extract",
+     "Stand on the objective and press Collect Objective. Your target switches to the "
+     "extraction point: plan again and get out."),
     ("Pro mode",
-     "Tick Pro mode on the preparation screen to switch off Plan Route and Auto Travel. "
-     "You read the patrols yourself and move with the arrow keys and Wait. A Pro run "
-     "earns +25% score."),
+     "Plan Route, Auto Travel and the amber next-turn preview are switched off. You read "
+     "the patrols yourself and move with the arrow keys and Wait. A Pro run earns +25% "
+     "score."),
     ("Score",
-     "Success 500 + objective 200 + extraction 100 + preparation bonus (up to 150) "
-     "+ high-risk bonus (hard missions), minus 5 per effort unit, minus 50 if an alert "
-     "was raised without a decoy; then +25% in Pro mode. "
+     "Success 500 + objective 200 + extraction 100 + high-risk bonus (Vault 300, Lab 500, "
+     "Penthouse 500), minus 5 per effort unit; then +25% in Pro mode. "
      "Ranks: Phantom 800+, Specialist 650+, Operative 450+, Rookie below."),
     ("Keyboard",
      "P plan route   •   Space next step   •   A auto travel   •   "
      "Esc stop   •   C collect   •   W wait   •   H hack terminal   "
-     "•   D deploy decoy   •   arrow keys move by hand"),
+     "•   arrow keys move by hand"),
 ]
 
 
@@ -129,30 +115,21 @@ class AboutScreen(TextPage):
             ("Heist Planner Game — Mission Strategy Simulator",
              "A fictional top-down stealth-puzzle and planning game, built as an MCA "
              "(AI & ML) project at Chandigarh University by Anshul Kaushik. All places, "
-             "obstacles and gadgets are imaginary."),
+             "drones and devices are imaginary."),
             ("Active database mode", self.app.db_status),
-            ("Route Guidance → Dijkstra's shortest-path algorithm",
-             "Each walkable tile is a vertex and each up/right/down/left step is an edge "
-             "whose cost is the cost of the tile entered. A heapq priority queue gives "
-             "O((V + E) log V). The route is rebuilt from a 'previous' map and is "
-             "recalculated whenever the target changes or a gate is sealed."),
-            ("Hard missions → Dijkstra on a state graph",
-             "With patrol drones and keycards a tile is not enough: the planner's vertex is "
-             "(tile, drone clock, keycard held, decoy turns left). The drone clock is the "
-             "turn number modulo the LCM of all patrol lengths, because the patrols then "
-             "repeat. Edges are moves and Wait; edges into a drone's view are left out. "
-             "It is still Dijkstra with a heap, on a bigger graph; tests cross-check it "
-             "with Bellman-Ford."),
+            ("Route Guidance → Dijkstra's shortest-path algorithm on a state graph",
+             "With patrol drones and keycards a tile alone is not enough, so the planner's "
+             "vertex is (tile, drone clock, keycard held). The drone clock is the turn number "
+             "modulo the LCM of all patrol lengths, because the patrols then repeat. Edges are "
+             "the four moves and Wait, with the cost of the tile entered; edges into a drone's "
+             "view are left out. A heapq priority queue gives O((V + E) log V). Tests "
+             "cross-check it with Bellman-Ford and with my matrix Dijkstra (DAA Exp 4)."),
             ("Terminal puzzles → the algorithms are the judges",
-             "Power Relay is checked with Dijkstra (minimum path load) and Cargo Lock with the "
-             "0/1 Knapsack DP (maximum credits within the mass limit). Puzzles where a greedy "
-             "choice would already win are thrown away, so the player has to plan."),
-            ("Suggested Kit → 0/1 Knapsack (dynamic programming)",
-             "Energy cost is the weight, mission usefulness is the value, and 8 energy "
-             "units is the capacity. A DP table best[i][c] is filled and traced back to "
-             "find the chosen gadgets. Ties prefer the cheaper kit, then the "
-             "alphabetically first one. Tests cross-check it with brute force and with a "
-             "Branch and Bound version."),
+             "Power Relay is checked with Dijkstra (minimum path load). Cargo Lock is the 0/1 "
+             "Knapsack problem: crate mass is the weight, credits are the value and the lift "
+             "limit is the capacity; a DP table best[i][c] finds the maximum. Puzzles where a "
+             "greedy choice would already win are thrown away, so the player has to plan. "
+             "Tests cross-check the DP with brute force and my Branch and Bound (DAA Exp 6)."),
             ("Technologies",
              "Python 3 standard library: tkinter / ttk / Canvas (all graphics are drawn "
              "shapes), heapq, dataclasses, sqlite3, json, logging, pathlib, unittest.\n"

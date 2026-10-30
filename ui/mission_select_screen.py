@@ -3,6 +3,7 @@
 import tkinter as tk
 from tkinter import ttk
 
+from core.game_engine import MissionRun
 from core.missions import MISSIONS, MISSION_ORDER
 from ui import styles
 from ui.base_screen import BaseScreen
@@ -10,7 +11,7 @@ from ui.map_view import draw_mini_map
 
 DIFFICULTY_STYLE = {"Easy": styles.GREEN, "Medium": styles.AMBER, "Hard": styles.RED,
                     "Expert": styles.EXPERT, "Master": styles.MASTER}
-THUMB_TILE = 7
+THUMB_TILE = 9
 CARDS_PER_ROW = 3
 MAX_ROWS = max(m.rows for m in MISSIONS.values())
 
@@ -25,7 +26,7 @@ class MissionCard(ttk.Frame):
         self.columnconfigure(1, weight=1)
 
         # Same canvas size for every card (the tallest map has 11 rows), so the
-        # card texts line up even though the Relay map is taller.
+        # card texts line up even if one map is shorter.
         width = mission.cols * THUMB_TILE
         height = MAX_ROWS * THUMB_TILE
         self.thumb = tk.Canvas(self, width=width, height=height, bg=styles.PANEL_ALT,
@@ -109,12 +110,15 @@ class MissionSelectScreen(BaseScreen):
 
         buttons = ttk.Frame(self, padding=(36, 4, 36, 18))
         buttons.grid(row=3, column=0, sticky="ew")
-        buttons.columnconfigure(0, weight=1)
+        buttons.columnconfigure(1, weight=1)
+        self.pro_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(buttons, text="Pro mode: no route guidance and no preview (+25% score)",
+                        variable=self.pro_var).grid(row=0, column=0, sticky="w")
         ttk.Button(buttons, text="Back", command=lambda: app.show("menu")).grid(
-            row=0, column=1, padx=(0, 10))
-        self.start_button = ttk.Button(buttons, text="Start Preparation",
-                                       style="Accent.TButton", command=self.start_preparation)
-        self.start_button.grid(row=0, column=2)
+            row=0, column=2, padx=(0, 10))
+        self.start_button = ttk.Button(buttons, text="Start Mission",
+                                       style="Accent.TButton", command=self.start_mission)
+        self.start_button.grid(row=0, column=3)
 
     def on_brief_resize(self, event) -> None:
         for label in self.brief_rows.values():
@@ -134,14 +138,19 @@ class MissionSelectScreen(BaseScreen):
         self.brief_rows["Terrain"].configure(text=", ".join(terrain))
         self.start_button.state(["!disabled"])
 
-    def start_preparation(self) -> None:
+    def start_mission(self) -> None:
+        """Create a new run of the selected mission and open the map."""
         if self.selected_id is None:
             return
         self.app.mission_id = self.selected_id
-        self.app.show("preparation")
+        self.app.pro_mode = self.pro_var.get()
+        self.app.run = MissionRun(self.app.player_name, MISSIONS[self.selected_id],
+                                  pro_mode=self.app.pro_mode)
+        self.app.show("gameplay")
 
     def on_show(self, **kwargs) -> None:
         self.welcome.configure(text=f"Operative {self.app.player_name}, select your target.")
+        self.pro_var.set(self.app.pro_mode)
         if self.app.mission_id in MISSIONS:
             self.select(self.app.mission_id)
         else:

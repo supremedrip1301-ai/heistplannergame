@@ -11,9 +11,7 @@ from core import missions as m
 from ui import styles
 
 # Drawing state flags for draw_tile()
-SEALED = "sealed"
 COLLECTED = "collected"
-WEAK_POINT = "weak_point"
 TAKEN = "taken"            # keycard already picked up
 UNLOCKED = "unlocked"      # door opened with the keycard
 SOLVED = "solved"          # terminal hacked
@@ -51,28 +49,6 @@ def draw_tile(canvas, x0, y0, size, char, flags=(), detail=True):
                 points.extend([px, py])
             canvas.create_line(*points, fill=styles.TILE_STATIC_MARK,
                                width=max(1, size // 18))
-
-    elif char == m.GATE:
-        if SEALED in flags:
-            canvas.create_rectangle(x0 + 1, y0 + 1, x1 - 1, y1 - 1,
-                                    fill=styles.TILE_GATE_SEALED, outline=styles.RED,
-                                    width=2)
-            if detail:
-                canvas.create_line(x0 + pad, y0 + pad, x1 - pad, y1 - pad,
-                                   fill=styles.RED, width=max(2, size // 12))
-                canvas.create_line(x0 + pad, y1 - pad, x1 - pad, y0 + pad,
-                                   fill=styles.RED, width=max(2, size // 12))
-        else:
-            canvas.create_rectangle(x0 + 1, y0 + 1, x1 - 1, y1 - 1,
-                                    fill=styles.TILE_GATE_OPEN, outline="")
-            if detail:
-                # Two vertical bars = an open gate frame.
-                for fx in (x0 + pad, x1 - pad):
-                    canvas.create_line(fx, y0 + pad, fx, y1 - pad, fill=styles.ACCENT_DARK,
-                                       width=max(2, size // 12))
-        if WEAK_POINT in flags and SEALED not in flags:
-            canvas.create_rectangle(x0 + 2, y0 + 2, x1 - 2, y1 - 2, outline=styles.AMBER,
-                                    width=2, dash=(4, 2))
 
     elif char == m.START:
         canvas.create_rectangle(x0 + 1, y0 + 1, x1 - 1, y1 - 1, fill=styles.TILE_START,
@@ -164,11 +140,10 @@ def draw_mini_map(canvas, grid, tile, x0=0, y0=0, flags_for=None, drones=()):
                            fill=styles.DRONE_BODY, outline="")
 
 
-def draw_drone(canvas, x, y, size, facing, frozen=False):
+def draw_drone(canvas, x, y, size, facing):
     """A drone: a diamond body with an 'eye' pointing where it will move next."""
-    body = styles.DRONE_FROZEN if frozen else styles.DRONE_BODY
     r = size * 0.34
-    canvas.create_polygon(x, y - r, x + r, y, x, y + r, x - r, y, fill=body,
+    canvas.create_polygon(x, y - r, x + r, y, x, y + r, x - r, y, fill=styles.DRONE_BODY,
                           outline=styles.DRONE_RING, width=2)
     d_row, d_col = facing
     tip_x, tip_y = x + d_col * r * 1.3, y + d_row * r * 1.3
@@ -203,12 +178,8 @@ class MapView(tk.Canvas):
     def tile_flags(self, pos) -> tuple:
         run = self.run
         flags = []
-        if pos in run.sealed_tiles:
-            flags.append(SEALED)
         if pos == run.mission.objective and run.objective_collected:
             flags.append(COLLECTED)
-        if pos == run.mission.gate and run.weak_point_visible:
-            flags.append(WEAK_POINT)
         if run.has_key:
             flags.extend([TAKEN, UNLOCKED])
         if run.terminal_solved:
@@ -240,11 +211,13 @@ class MapView(tk.Canvas):
                 self.create_rectangle(ox + col * size, oy + row * size,
                                       ox + (col + 1) * size, oy + (row + 1) * size,
                                       fill=styles.VISION, stipple="gray25", outline="")
-            # Pocket Scanner: amber outlines where the drones will look next turn.
-            for row, col in run.watched_next_turn():
-                self.create_rectangle(ox + col * size + 3, oy + row * size + 3,
-                                      ox + (col + 1) * size - 3, oy + (row + 1) * size - 3,
-                                      outline=styles.VISION_NEXT, dash=(3, 3))
+            # Preview: amber outlines where the drones will look after the next
+            # turn (switched off in Pro mode, where you must read the patrols).
+            if not run.pro_mode and run.is_active:
+                for row, col in run.watched_next_turn():
+                    self.create_rectangle(ox + col * size + 3, oy + row * size + 3,
+                                          ox + (col + 1) * size - 3, oy + (row + 1) * size - 3,
+                                          outline=styles.VISION_NEXT, dash=(3, 3))
 
         # Route overlay: a line through tile centres plus small dots, so the
         # map underneath stays visible.
@@ -278,17 +251,10 @@ class MapView(tk.Canvas):
             self.create_oval(x - ring, y - ring, x + ring, y + ring, outline=styles.ROUTE,
                              width=2)
 
-        # Sealed-gate warning mark above the gate.
-        for pos in run.sealed_tiles:
-            x, y = centre(pos)
-            self.create_text(x, y - size * 0.62, text="SEALED", fill=styles.RED,
-                             font=styles.font(max(7, size // 5), "bold"))
-
         # Drones, then the character on top of everything.
-        frozen = run.freeze_left > 0
         for drone, pos in run.drone_positions():
             x, y = centre(pos)
-            draw_drone(self, x, y, size, drone.facing(run.clock), frozen)
+            draw_drone(self, x, y, size, drone.facing(run.clock))
 
         # The character is drawn LAST so nothing can hide it.
         x, y = centre(run.position)
@@ -307,8 +273,6 @@ LEGEND_ITEMS = (
     (m.FLOOR, (), "Floor"),
     (m.WALL, (), "Wall"),
     (m.STATIC_FIELD, (), "Static field"),
-    (m.GATE, (), "Relay gate"),
-    (m.GATE, (SEALED,), "Sealed gate"),
     (m.OBJECTIVE, (), "Objective"),
     (m.EXTRACTION, (), "Extraction"),
 )
@@ -329,11 +293,13 @@ class Legend(tk.Canvas):
     def __init__(self, parent, bg=styles.BG):
         super().__init__(parent, height=30, bg=bg, highlightthickness=0, bd=0)
         self.mission = None
+        self.show_preview = True
         self.bind("<Configure>", lambda e: self.redraw())
 
-    def show_for(self, mission) -> None:
+    def show_for(self, mission, show_preview: bool = True) -> None:
         """Only explain the tile types that appear on this mission's map."""
         self.mission = mission
+        self.show_preview = show_preview
         self.redraw()
 
     def items(self) -> list:
@@ -346,6 +312,8 @@ class Legend(tk.Canvas):
         if mission is not None and mission.drones:
             items.append(("drone", (), "Drone"))
             items.append(("vision", (), "Drone vision"))
+            if self.show_preview:
+                items.append(("next", (), "Next-turn vision"))
         items.append(("route", (), "Planned route"))
         items.append(("you", (), "You"))
         return items
@@ -376,6 +344,11 @@ class Legend(tk.Canvas):
                                       outline=styles.TILE_FLOOR_EDGE)
                 self.create_rectangle(x, y, x + swatch, y + swatch, fill=styles.VISION,
                                       stipple="gray25", outline="")
+            elif char == "next":
+                self.create_rectangle(x, y, x + swatch, y + swatch, fill=styles.TILE_FLOOR,
+                                      outline=styles.TILE_FLOOR_EDGE)
+                self.create_rectangle(x + 2, y + 2, x + swatch - 2, y + swatch - 2,
+                                      outline=styles.VISION_NEXT, dash=(3, 3))
             elif char == "you":
                 self.create_oval(x + 2, y + 2, x + swatch - 2, y + swatch - 2,
                                  fill=styles.CHARACTER, outline=styles.CHARACTER_RING, width=2)

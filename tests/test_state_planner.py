@@ -4,23 +4,21 @@ import unittest
 
 from core.drones import Drone, is_detected
 from core.missions import MISSIONS, build_tile_costs
-from core.pathfinding import find_shortest_path, path_cost
+from core.pathfinding import find_shortest_path
 from core.state_planner import (PlanContext, count_waits, plan_state_route,
                                 successors)
+from tests.classic_maps import CLASSIC, FLOOR_COSTS
 from tests.reference_algorithms import bellman_ford
 
 COSTS = build_tile_costs()
 
 
-def simulate(ctx, path, clock=0, freeze=0):
+def simulate(ctx, path, clock=0):
     """Walk a planned path turn by turn; return (cost, ever_seen)."""
     cost, seen = 0, False
     has_key = False
     for a, b in zip(path, path[1:]):
-        if freeze > 0:
-            new_clock, freeze = clock, freeze - 1
-        else:
-            new_clock = (clock + 1) % ctx.period
+        new_clock = (clock + 1) % ctx.period
         if a == b:
             cost += 1
         else:
@@ -34,8 +32,8 @@ def simulate(ctx, path, clock=0, freeze=0):
     return cost, seen
 
 
-def bellman_ford_cost(ctx, start, goal, clock=0, has_key=False, freeze=0):
-    start_state = (start[0], start[1], clock, has_key, freeze)
+def bellman_ford_cost(ctx, start, goal, clock=0, has_key=False):
+    start_state = (start[0], start[1], clock, has_key)
     dist = bellman_ford(start_state, lambda s: successors(ctx, s))
     costs = [d for s, d in dist.items() if (s[0], s[1]) == goal]
     return min(costs) if costs else None
@@ -44,21 +42,19 @@ def bellman_ford_cost(ctx, start, goal, clock=0, has_key=False, freeze=0):
 class TestMatchesTileDijkstra(unittest.TestCase):
     """With no drones and no keycards the state graph is just the tile graph."""
 
-    def test_old_missions_same_costs(self):
-        for mission in MISSIONS.values():
-            if mission.drones or mission.has_keycard or mission.has_terminal:
-                continue
-            ctx = PlanContext(mission.grid, COSTS)
-            for target in (mission.objective, mission.exit):
-                with self.subTest(mission=mission.mission_id, target=target):
-                    a = find_shortest_path(mission.grid, mission.start, target, COSTS)
-                    b = plan_state_route(ctx, mission.start, target)
+    def test_classic_grids_same_costs(self):
+        for grid in CLASSIC.values():
+            ctx = PlanContext(grid.grid, FLOOR_COSTS)
+            for target in (grid.objective, grid.exit):
+                with self.subTest(grid=grid.mission_id, target=target):
+                    a = find_shortest_path(grid.grid, grid.start, target, FLOOR_COSTS)
+                    b = plan_state_route(ctx, grid.start, target)
                     self.assertEqual(a.cost, b.cost)
                     self.assertEqual(count_waits(b.path), 0)
 
-    def test_sealed_gate_same_cost(self):
-        relay = MISSIONS["relay"]
-        ctx = PlanContext(relay.grid, COSTS, blocked={relay.gate})
+    def test_blocked_gate_same_cost(self):
+        relay = CLASSIC["relay"]
+        ctx = PlanContext(relay.grid, FLOOR_COSTS, blocked={relay.gate})
         self.assertEqual(plan_state_route(ctx, relay.objective, relay.exit).cost, 19)
 
 
@@ -89,14 +85,6 @@ class TestDrones(unittest.TestCase):
             self.assertTrue(route.found)
             self.assertEqual(route.cost, bellman_ford_cost(ctx, (1, 1), (3, 1), clock))
             self.assertFalse(simulate(ctx, route.path, clock)[1])
-
-    def test_freeze_helps(self):
-        drone = Drone("a", [(3, 1), (3, 7)])
-        ctx = PlanContext(self.GRID, COSTS, [drone])
-        normal = plan_state_route(ctx, (1, 1), (3, 1), clock=2)
-        frozen = plan_state_route(ctx, (1, 1), (3, 1), clock=2, freeze=3)
-        self.assertLessEqual(frozen.cost, normal.cost)
-        self.assertEqual(frozen.cost, bellman_ford_cost(ctx, (1, 1), (3, 1), 2, False, 3))
 
     def test_unbeatable_guard_means_no_route(self):
         grid = ["#####",
@@ -139,8 +127,6 @@ class TestNewMissionsAgainstBellmanFord(unittest.TestCase):
 
     def test_every_new_mission(self):
         for mission in MISSIONS.values():
-            if not (mission.drones or mission.has_keycard):
-                continue
             with self.subTest(mission=mission.mission_id):
                 blocked = set(mission.laser_tiles())               # lasers still on
                 ctx = PlanContext(mission.grid, COSTS, mission.drones, blocked)

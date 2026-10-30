@@ -54,9 +54,8 @@ def main() -> int:
                     before == {"total_runs": 0, "success_runs": 0, "best_score": 0,
                                "avg_score": 0.0})
 
-        record = {"player_name": TEST_PLAYER, "mission_id": "gallery", "result": "SUCCESS",
-                  "score": 810, "moves": 24, "route_cost": 28,
-                  "kit_summary": "Pocket Scanner, Mobility Boots, Repair Module",
+        record = {"player_name": TEST_PLAYER, "mission_id": "vault", "result": "SUCCESS",
+                  "score": 880, "moves": 44, "route_cost": 44, "kit_summary": "None",
                   "alert_triggered": False}
         # Call the procedure directly (save_run() would COMMIT, we want to roll back).
         with conn.cursor() as cursor:
@@ -70,7 +69,7 @@ def main() -> int:
 
         after = repo.get_stats(TEST_PLAYER)
         ok &= check(f"HP_GET_STATS after save: {after}",
-                    after["total_runs"] == 1 and after["best_score"] == 810)
+                    after["total_runs"] == 1 and after["best_score"] == 880)
 
         runs = repo.get_recent_runs(5, TEST_PLAYER)
         ok &= check("History query with HP_RANK_TITLE shows the run as 'Phantom'",
@@ -84,7 +83,7 @@ def main() -> int:
 
         try:
             with conn.cursor() as cursor:
-                cursor.callproc("HP_SAVE_RUN", [TEST_PLAYER, "gallery", "SUCCESS", -1, 1, 1,
+                cursor.callproc("HP_SAVE_RUN", [TEST_PLAYER, "vault", "SUCCESS", -1, 1, 1,
                                                 "None", "N", "N", cursor.var(int)])
             ok &= check("Negative score rejected", False)
         except oracledb.DatabaseError as error:

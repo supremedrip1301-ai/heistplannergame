@@ -87,11 +87,6 @@ class TestDetection(unittest.TestCase):
         # Drone goes (1,2)->(1,3) while the player goes (1,3)->(1,2).
         self.assertTrue(is_detected([drone], GRID, (1, 3), (1, 2), 0, 1))
 
-    def test_frozen_drones_do_not_move(self):
-        drone = Drone("a", [(1, 1), (1, 5)])
-        # Clock stays at 0: drone still at (1,1) seeing (1,2),(1,3); (1,4) is safe.
-        self.assertFalse(is_detected([drone], GRID, (2, 4), (1, 4), 0, 0))
-
 
 if __name__ == "__main__":
     unittest.main()

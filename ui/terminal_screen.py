@@ -62,7 +62,8 @@ class TerminalScreen(BaseScreen):
         self.readout = ttk.Label(side, text="", style="PanelValue.TLabel",
                                  font=styles.font(14, "bold"), wraplength=270, justify="left")
         self.readout.grid(row=1, column=0, sticky="w", pady=(8, 4))
-        self.hint = ttk.Label(side, text="", style="PanelAccent.TLabel", wraplength=270,
+        self.hint = ttk.Label(side, text="Only the best possible answer works.",
+                              style="PanelAccent.TLabel", wraplength=270,
                               justify="left")
         self.hint.grid(row=2, column=0, sticky="w", pady=(4, 4))
         self.message = ttk.Label(side, text="", style="PanelDim.TLabel", wraplength=270,
@@ -94,7 +95,6 @@ class TerminalScreen(BaseScreen):
         self.loaded = set()
         self.title_label.configure(text=f"Terminal — {self.puzzle.title}")
         self.instructions.configure(text=INSTRUCTIONS[self.puzzle.kind])
-        self.hint.configure(text=run.lens_hint())
         self.message.configure(text="", style="PanelDim.TLabel")
         self.submit_button.state(["!disabled"])
         self.back_button.configure(style="TButton")

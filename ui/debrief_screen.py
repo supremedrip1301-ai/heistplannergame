@@ -3,7 +3,6 @@
 import tkinter as tk
 from tkinter import ttk
 
-from core.gadgets import BOOTS, DECOY
 from core.scoring import rank_title
 from ui import styles
 from ui.base_screen import BaseScreen
@@ -13,16 +12,12 @@ def outcome_sentence(run) -> str:
     """A short, friendly summary of how the mission went."""
     if run.pro_mode:
         return "Pro mode, no guidance, and nobody saw a thing. That was real planning."
-    if run.mission.drones and run.waits:
-        return f"Clean extraction. You waited {run.waits} turn(s) in the shadows and the drones never knew."
-    if run.alert_triggered and run.carries_decoy:
-        return "The alarm screamed, but your decoy took the blame. Smooth work."
-    if run.alert_triggered:
-        return "You made it out through the alert. A decoy would have kept your record clean."
-    if BOOTS in run.kit_ids and any("~" in line for line in run.mission.grid):
-        return "Clean extraction. Your boots made the static fields easy."
-    if run.score.prep_bonus == 150:
-        return "Clean extraction with a perfectly prepared kit."
+    if run.wrong_answers:
+        return (f"Clean extraction, even after {run.wrong_answers} terminal lockout(s). "
+                "Next time, solve it first try.")
+    if run.waits:
+        return (f"Clean extraction. You waited {run.waits} turn(s) in the shadows and the "
+                "drones never knew.")
     return "Clean extraction. The facility never knew you were there."
 
 
@@ -68,7 +63,7 @@ class DebriefScreen(BaseScreen):
         facts.columnconfigure(1, weight=1)
         self.facts = {}
         for i, name in enumerate(("Mission", "Operative", "Result", "Moves", "Total effort",
-                                  "Kit used", "Alert", "Record")):
+                                  "Mode", "Record")):
             ttk.Label(facts, text=name, style="PanelDim.TLabel").grid(
                 row=i, column=0, sticky="nw", padx=(0, 16), pady=4)
             value = ttk.Label(facts, text="", style="PanelValue.TLabel", wraplength=300,
@@ -117,20 +112,21 @@ class DebriefScreen(BaseScreen):
         self.facts["Operative"].configure(text=run.player_name)
         self.facts["Result"].configure(text="Objective secured and extracted",
                                        style="PanelGood.TLabel")
-        self.facts["Moves"].configure(text=str(run.moves))
-        self.facts["Total effort"].configure(text=str(run.effort))
-        self.facts["Kit used"].configure(text=run.kit_text)
-        if run.alert_triggered:
-            alert = "Yes — penalty cancelled by decoy" if DECOY in run.kit_ids else "Yes"
-            self.facts["Alert"].configure(text=alert, style="PanelAlert.TLabel")
-        else:
-            self.facts["Alert"].configure(text="No", style="PanelValue.TLabel")
+        waits = f" ({run.waits} waits)" if run.waits else ""
+        self.facts["Moves"].configure(text=f"{run.moves}{waits}")
+        lockouts = f" (incl. {run.wrong_answers} lockout(s))" if run.wrong_answers else ""
+        self.facts["Total effort"].configure(text=f"{run.effort}{lockouts}")
+        self.facts["Mode"].configure(text="Pro (no guidance)" if run.pro_mode else "Guided")
         self.facts["Record"].configure(text=self.app.last_save_message or "-")
 
     def play_again(self) -> None:
-        """Same mission, back to the preparation screen."""
-        self.app.run = None
-        self.app.show("preparation")
+        """Same mission and mode again, straight onto the map (new puzzle)."""
+        run = self.app.run
+        if run is None:
+            self.app.show("mission_select")
+            return
+        run.restart()
+        self.app.show("gameplay")
 
     def choose_another(self) -> None:
         self.app.run = None

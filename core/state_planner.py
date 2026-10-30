@@ -1,16 +1,15 @@
-"""Route planning for the hard missions: Dijkstra on a STATE graph.
+"""Route planning for the missions: Dijkstra on a STATE graph.
 
-In the first three missions a vertex is simply a tile. In the new missions
-that is not enough, because whether a move is safe depends on more than
-where you stand:
+On a plain map a vertex is simply a tile (core/pathfinding.py). In these
+missions that is not enough, because whether a move is safe depends on more
+than where you stand:
 
     * WHEN you move  - drones are somewhere else at every turn
     * WHAT you carry - a locked door opens only if you hold the keycard
-    * decoy          - while a Signal Decoy is active the drones are frozen
 
 So a vertex here is a state:
 
-    (row, col, drone_clock, has_key, freeze_left)
+    (row, col, drone_clock, has_key)
 
 drone_clock is the turn number modulo the drone period (the LCM of all
 patrol lengths; core/drones.py), because after that many turns every drone
@@ -23,8 +22,8 @@ Edges (one player turn each)
     without the keycard, or if any drone would see the player afterwards.
 
 All edge costs are positive, so Dijkstra is still correct; it just works on
-a bigger graph. With 132 tiles x 12 clock values x 2 x 4 there are at most
-about 12,700 states, which takes a few milliseconds.
+a bigger graph. With 132 tiles x 24 clock values x 2 there are at most
+about 6,300 states, which takes a few milliseconds.
 Time complexity: O((S + T) log S) for S states and T transitions (T <= 5S).
 """
 
@@ -64,12 +63,8 @@ class PlanContext:
 
 def successors(ctx: PlanContext, state):
     """All (next_state, cost) pairs reachable in one turn from state."""
-    row, col, clock, has_key, freeze = state
-    # The drone clock only ticks when no decoy is freezing the drones.
-    if freeze > 0:
-        next_clock, next_freeze = clock, freeze - 1
-    else:
-        next_clock, next_freeze = (clock + 1) % ctx.period, 0
+    row, col, clock, has_key = state
+    next_clock = (clock + 1) % ctx.period        # every turn the drones advance
 
     options = []
     for d_row, d_col in DIRECTIONS:
@@ -89,12 +84,12 @@ def successors(ctx: PlanContext, state):
                                       clock, next_clock):
             continue
         new_key = has_key or ctx.grid[new_pos[0]][new_pos[1]] == KEYCARD
-        result.append(((new_pos[0], new_pos[1], next_clock, new_key, next_freeze), cost))
+        result.append(((new_pos[0], new_pos[1], next_clock, new_key), cost))
     return result
 
 
 def plan_state_route(ctx: PlanContext, start, goal, clock: int = 0,
-                     has_key: bool = False, freeze: int = 0) -> RouteResult:
+                     has_key: bool = False) -> RouteResult:
     """Cheapest safe route from start to goal, starting at the given drone clock.
 
     Returns RouteResult(path, cost, found). The path lists the tile occupied
@@ -102,7 +97,7 @@ def plan_state_route(ctx: PlanContext, start, goal, clock: int = 0,
     """
     if not ctx.can_enter(goal, True) or start is None:
         return RouteResult([], None, False)
-    start_state = (start[0], start[1], clock % ctx.period, has_key, freeze)
+    start_state = (start[0], start[1], clock % ctx.period, has_key)
     if start == goal:
         return RouteResult([start], 0, True)
 

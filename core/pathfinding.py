@@ -5,7 +5,7 @@ How the map becomes a graph
 * Every walkable tile is a vertex, written as a (row, col) tuple.
 * From a tile you may step up, right, down or left (no diagonals) into a
   neighbouring walkable tile. Each such step is a directed edge.
-* Walls ('#') and sealed tiles (the relay gate after the alert) are not
+* Walls ('#') and blocked tiles (for example active laser barriers) are not
   vertices at all, so no route can ever pass through them.
 
 Movement-cost model (used everywhere in the game)
@@ -64,7 +64,7 @@ def is_inside(grid, pos) -> bool:
 
 
 def is_walkable(grid, pos, tile_costs, blocked=frozenset()) -> bool:
-    """True if the tile can be entered: inside the map, has a cost, not sealed."""
+    """True if the tile can be entered: inside the map, has a cost, not blocked."""
     if not is_inside(grid, pos):
         return False
     if pos in blocked:
@@ -96,7 +96,7 @@ def find_shortest_path(grid, start, goal, tile_costs, blocked=frozenset()) -> Ro
     start/goal - (row, col) tuples
     tile_costs - dict: tile character -> cost of entering it. A character
                  that is missing from the dict (for example '#') is a wall.
-    blocked    - set of (row, col) tiles that are sealed right now
+    blocked    - set of (row, col) tiles that are blocked right now
 
     Returns RouteResult(path, cost, found). Never raises for "no route":
     an unreachable or invalid goal gives RouteResult([], None, False).

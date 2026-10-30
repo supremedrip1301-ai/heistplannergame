@@ -12,7 +12,6 @@ from ui.history_screen import HistoryScreen
 from ui.info_screens import AboutScreen, HowToPlayScreen
 from ui.menu_screen import MenuScreen
 from ui.mission_select_screen import MissionSelectScreen
-from ui.preparation_screen import PreparationScreen
 from ui.terminal_screen import TerminalScreen
 
 logger = logging.getLogger(__name__)
@@ -22,7 +21,6 @@ SCREEN_CLASSES = {
     "how_to_play": HowToPlayScreen,
     "about": AboutScreen,
     "mission_select": MissionSelectScreen,
-    "preparation": PreparationScreen,
     "gameplay": GameplayScreen,
     "terminal": TerminalScreen,
     "debrief": DebriefScreen,
@@ -41,8 +39,6 @@ class MainWindow:
         # Shared state that several screens need.
         self.player_name = config.DEFAULT_PLAYER_NAME
         self.mission_id = None
-        self.kit_ids = ()
-        self.best_usefulness = 0
         self.pro_mode = False
         self.run = None                     # the current MissionRun
         self.last_save_message = ""         # shown on the debrief screen

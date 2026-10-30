@@ -18,8 +18,8 @@ COLUMNS = (
     ("rank", "Rank", 90),
     ("moves", "Moves", 60),
     ("effort", "Effort", 60),
-    ("kit", "Kit", 200),
-    ("date", "Date/Time", 140),
+    ("mode", "Mode", 80),
+    ("date", "Date/Time", 160),
 )
 RESULT_TEXT = {"SUCCESS": "Success", "ABANDONED": "Abandoned", "CAUGHT": "Caught"}
 EMPTY_TEXT = "No missions on record yet — your first debrief will appear here."
@@ -84,7 +84,7 @@ class HistoryScreen(BaseScreen):
             anchor = "e" if key in ("score", "moves", "effort") else "w"
             self.tree.heading(key, text=heading, anchor=anchor)
             self.tree.column(key, width=width, minwidth=50, anchor=anchor,
-                             stretch=(key == "kit"))
+                             stretch=(key in ("mission", "date")))
         self.tree.tag_configure("abandoned", foreground=styles.TEXT_DIM)
         self.tree.tag_configure("caught", foreground=styles.RED)
         self.tree.tag_configure("odd", background=styles.PANEL_ALT)
@@ -136,13 +136,10 @@ class HistoryScreen(BaseScreen):
             if i % 2 == 1:
                 tags.append("odd")
             result = RESULT_TEXT.get(run["result"], run["result"])
-            if run.get("pro_mode") == "Y":
-                result = result + " · PRO"
-            if run["alert_triggered"] == "Y":
-                result = result + " ▲"
+            mode = "Pro" if run.get("pro_mode") == "Y" else "Guided"
             self.tree.insert("", "end", values=(
                 run["player_name"], run["mission_name"], result, run["score"],
-                run["rank_title"], run["moves"], run["route_cost"], run["kit_summary"],
+                run["rank_title"], run["moves"], run["route_cost"], mode,
                 run["played_at"]), tags=tags)
 
     def show_stats(self, stats: dict) -> None:

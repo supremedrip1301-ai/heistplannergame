@@ -8,15 +8,14 @@ import unittest
 from pathlib import Path
 
 from core import game_engine as ge
-from core.missions import MISSIONS
+from tests.classic_maps import ARCHIVE_MAP, simple_mission
 from database.database_manager import create_repository
 from database.sqlite_repository import SQLiteRepository
 
 
 def sample_record(**changes):
-    record = {"player_name": "Tester", "mission_id": "gallery", "result": "SUCCESS",
-              "score": 810, "moves": 24, "route_cost": 28,
-              "kit_summary": "Pocket Scanner, Mobility Boots, Repair Module",
+    record = {"player_name": "Tester", "mission_id": "vault", "result": "SUCCESS",
+              "score": 880, "moves": 44, "route_cost": 44, "kit_summary": "None",
               "alert_triggered": False}
     record.update(changes)
     return record
@@ -47,7 +46,7 @@ class TestSQLiteRepository(unittest.TestCase):
         self.repo = SQLiteRepository(self.path)
         self.repo.initialise()                       # second start: INSERT OR IGNORE
         count = self.repo.conn.execute("SELECT COUNT(*) FROM missions").fetchone()[0]
-        self.assertEqual(count, 6)
+        self.assertEqual(count, 3)
 
     def test_save_appears_in_history_and_stats(self):
         run_id = self.repo.save_run(sample_record())
@@ -55,13 +54,13 @@ class TestSQLiteRepository(unittest.TestCase):
         runs = self.repo.get_recent_runs()
         self.assertEqual(len(runs), 1)
         self.assertEqual(runs[0]["run_id"], run_id)
-        self.assertEqual(runs[0]["mission_name"], "The Gallery")
-        self.assertEqual(runs[0]["score"], 810)
+        self.assertEqual(runs[0]["mission_name"], "The Vault")
+        self.assertEqual(runs[0]["score"], 880)
         self.assertEqual(runs[0]["rank_title"], "Phantom")
         self.assertEqual(runs[0]["alert_triggered"], "N")
         stats = self.repo.get_stats("Tester")
         self.assertEqual((stats["total_runs"], stats["success_runs"], stats["best_score"]),
-                         (1, 1, 810))
+                         (1, 1, 880))
 
     def test_stats_ignore_abandoned_in_average(self):
         self.repo.save_run(sample_record(score=600))
@@ -149,7 +148,8 @@ class TestSQLiteRepository(unittest.TestCase):
         self.assertEqual(len(self.repo.get_recent_runs()), 2)
 
     def test_engine_save_path_saves_only_once(self):
-        run = ge.MissionRun("Tester", MISSIONS["archive"])
+        # A plain grid without drones, saved under the "vault" mission ID.
+        run = ge.MissionRun("Tester", simple_mission(ARCHIVE_MAP))
         run.plan_route()
         while run.has_valid_route():
             run.step()

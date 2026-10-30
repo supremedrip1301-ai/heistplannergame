@@ -1,13 +1,16 @@
-"""Tests for core/pathfinding.py (heap-based Dijkstra)."""
+"""Tests for core/pathfinding.py (heap-based Dijkstra).
+
+The three classic grids (tests/classic_maps.py) have hand-verified minimum
+costs: Archive 14 / 8, Gallery 17 (13 with half-cost static fields, direct
+route 21) / 15, Relay 13 / 11, and 19 once the gate G is blocked.
+"""
 
 import unittest
 
-from core.missions import MISSIONS, build_tile_costs
+from core.missions import MISSIONS as GAME_MISSIONS, build_tile_costs
 from core.pathfinding import find_shortest_path, path_cost, is_walkable
+from tests.classic_maps import BOOT_COSTS, CLASSIC as MISSIONS, FLOOR_COSTS as COSTS
 from tests.reference_algorithms import dijkstra_matrix, grid_to_matrix
-
-COSTS = build_tile_costs()
-BOOT_COSTS = build_tile_costs(["boots"])
 
 
 class PathCheckMixin:
@@ -84,7 +87,7 @@ class TestSmallGrids(unittest.TestCase, PathCheckMixin):
 
 
 class TestMissionNumbers(unittest.TestCase, PathCheckMixin):
-    """The exact Section 8 numbers of MASTER_PROMPT.md."""
+    """The exact hand-verified numbers of the classic grids."""
 
     def route(self, mission_id, a, b, costs=COSTS, blocked=frozenset()):
         m = MISSIONS[mission_id]
@@ -166,6 +169,12 @@ class TestAgainstWorksheetMatrixVersion(unittest.TestCase):
             with self.subTest(mission=mission.mission_id):
                 self.compare(mission.grid, COSTS)
                 self.compare(mission.grid, BOOT_COSTS)
+
+    def test_game_missions_all_pairs(self):
+        # The real mission maps too (doors and lasers counted as open here).
+        for mission in GAME_MISSIONS.values():
+            with self.subTest(mission=mission.mission_id):
+                self.compare(mission.grid, build_tile_costs())
 
     def test_relay_with_sealed_gate(self):
         m = MISSIONS["relay"]

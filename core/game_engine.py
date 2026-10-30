@@ -11,20 +11,16 @@ Status flow
 
 Turns
     Every move AND every Wait is one turn. After each turn the patrol drones
-    advance one tile (unless a Signal Decoy has frozen them) and the engine
-    checks whether any drone can see the player.
+    advance one tile and the engine checks whether any drone can see the player.
 """
 
 import logging
 import random
 
 from core import config
-from core.drones import is_detected, watched_tiles, drone_clock_period
-from core.gadgets import (GADGETS, DECOY, LENS, REPAIR, SCANNER, SHIELD,
-                          kit_energy, kit_summary)
+from core.drones import drone_clock_period, is_detected, watched_tiles
 from core.missions import DOOR, KEYCARD, LASER, build_tile_costs
-from core.pathfinding import (RouteResult, find_shortest_path, is_walkable,
-                              step_direction)
+from core.pathfinding import RouteResult, is_walkable, step_direction
 from core.puzzles import make_puzzle
 from core.scoring import calculate_score
 from core.state_planner import WAIT_COST, PlanContext, count_waits, plan_state_route
@@ -49,17 +45,20 @@ RESULT_CAUGHT = "CAUGHT"
 ROUTE_TO_TARGET = "target"
 ROUTE_TO_TERMINAL = "terminal"
 
+# The database still has the kit / alert columns of the first version of the
+# game, so old records stay readable. New runs always store these values.
+NO_KIT = "None"
+
 
 class StepResult:
     """What happened when the player tried to move one tile (or wait)."""
 
     def __init__(self, ok: bool, reason: str = "", completed: bool = False,
-                 caught: bool = False, shielded: bool = False, picked_key: bool = False):
+                 caught: bool = False, picked_key: bool = False):
         self.ok = ok
         self.reason = reason          # friendly text when the move was refused
         self.completed = completed    # True when this step finished the mission
         self.caught = caught          # a drone saw the player: mission failed
-        self.shielded = shielded      # a drone saw the player, the Shield Patch saved them
         self.picked_key = picked_key  # the keycard was picked up on this step
 
     def __bool__(self):
@@ -70,30 +69,13 @@ class StepResult:
                 f"caught={self.caught})")
 
 
-def validate_kit(kit_ids) -> tuple:
-    """Return the kit as a sorted tuple, or raise ValueError if it is illegal."""
-    kit = tuple(sorted(kit_ids))
-    if len(set(kit)) != len(kit):
-        raise ValueError("A gadget can only be carried once.")
-    for gadget_id in kit:
-        if gadget_id not in GADGETS:
-            raise ValueError(f"Unknown gadget: {gadget_id}")
-    if kit_energy(kit) > config.KIT_CAPACITY:
-        raise ValueError("The kit uses more energy than the capacity allows.")
-    return kit
-
-
 class MissionRun:
     """All state of one run of one mission, plus the rules that change it."""
 
-    def __init__(self, player_name: str, mission, kit_ids=(), best_usefulness: int = 0,
-                 pro_mode: bool = False, puzzle_seed=None):
+    def __init__(self, player_name: str, mission, pro_mode: bool = False, puzzle_seed=None):
         self.player_name = player_name
         self.mission = mission                     # read-only map and story
-        self.kit_ids = validate_kit(kit_ids)
-        self.tile_costs = build_tile_costs(self.kit_ids)   # boots-aware costs
-        self.chosen_usefulness = sum(mission.usefulness[g] for g in self.kit_ids)
-        self.best_usefulness = best_usefulness
+        self.tile_costs = build_tile_costs()
         self.pro_mode = pro_mode                   # no route guidance, bigger score
         if puzzle_seed is None:
             puzzle_seed = random.randrange(1_000_000_000)
@@ -108,8 +90,6 @@ class MissionRun:
         self.position = self.mission.start
         self.objective_collected = False
         self.status = PLANNING
-        self.sealed_tiles = set()
-        self.alert_triggered = False
         self.moves = 0                             # turns taken (moves + waits)
         self.waits = 0
         self.effort = 0
@@ -117,20 +97,15 @@ class MissionRun:
         self.route_goal = ROUTE_TO_TARGET
         self.score = None                          # ScoreBreakdown when completed
         self.result_saved = False
-        # Hard-mission state
-        self.clock = 0                             # drone clock (stops while frozen)
-        self.freeze_left = 0                       # turns of Signal Decoy freeze left
+        self.clock = 0                             # drone clock = turns taken
         self.has_key = False
         self.terminal_solved = False
         self.puzzle = None                         # created when the terminal is opened
         self.wrong_answers = 0
-        self.shield_used = False
-        self.repair_used = False
-        self.decoy_used = False
         self.spotted_by = ""                       # name of the drone that caught us
 
     def restart(self) -> None:
-        """Start the same mission again with the same kit (gate re-opened)."""
+        """Start the same mission again (drones, keycard, lasers and puzzle reset)."""
         self.run_token = self.run_token + 1
         self.reset_state()
         logger.info("Run restarted: %s (token %d)", self.mission.mission_id, self.run_token)
@@ -153,42 +128,21 @@ class MissionRun:
         return f"Reach the {self.mission.objective_name}"
 
     @property
-    def carries_decoy(self) -> bool:
-        return DECOY in self.kit_ids
-
-    @property
-    def weak_point_visible(self) -> bool:
-        """Pocket Scanner reveals the gate that the alert will seal."""
-        return SCANNER in self.kit_ids and self.mission.has_alert
-
-    @property
-    def kit_text(self) -> str:
-        return kit_summary(self.kit_ids)
-
-    @property
     def lasers_on(self) -> bool:
         return self.mission.has_terminal and not self.terminal_solved
 
     def blocked_tiles(self) -> set:
-        """Tiles that cannot be entered right now.
+        """Tiles that cannot be entered right now (active lasers).
 
-        The tile the character stands on is never treated as blocked, so the
-        character can still walk away if it happened to be on the gate.
+        Locked doors are handled by the planner through the keycard state.
+        The tile the character stands on is never treated as blocked.
         """
-        blocked = set(self.sealed_tiles)
+        blocked = set()
         if self.lasers_on:
             blocked |= set(self.mission.laser_tiles())
-        if not self.has_key:
-            blocked |= set(self.mission.door_tiles())
         return blocked - {self.position}
 
     # ------------------------------------------------------------ drones
-    def next_clock(self) -> int:
-        """Drone clock after one more turn (it does not tick while frozen)."""
-        if self.freeze_left > 0:
-            return self.clock
-        return self.clock + 1
-
     def drone_positions(self) -> list:
         return [(drone, drone.position(self.clock)) for drone in self.mission.drones]
 
@@ -196,48 +150,22 @@ class MissionRun:
         return watched_tiles(self.mission.drones, self.clock, self.mission.grid)
 
     def watched_next_turn(self) -> set:
-        """Pocket Scanner: where the drones will look after the next turn."""
-        if SCANNER not in self.kit_ids:
-            return set()
-        return watched_tiles(self.mission.drones, self.next_clock(), self.mission.grid)
-
-    def can_deploy_decoy(self) -> bool:
-        return (self.is_active and DECOY in self.kit_ids and bool(self.mission.drones)
-                and not self.decoy_used)
-
-    def deploy_decoy(self) -> bool:
-        """Signal Decoy: every drone freezes for DECOY_FREEZE_TURNS turns (once per run)."""
-        if not self.can_deploy_decoy():
-            return False
-        self.decoy_used = True
-        self.freeze_left = config.DECOY_FREEZE_TURNS
-        self.route = None              # timings changed: the old route is stale
-        logger.info("Decoy deployed: drones frozen for %d turns", self.freeze_left)
-        return True
+        """Where the drones will look after the next turn."""
+        return watched_tiles(self.mission.drones, self.clock + 1, self.mission.grid)
 
     # ------------------------------------------------------------ routes
     def has_valid_route(self) -> bool:
         return (self.route is not None and self.route.found
                 and len(self.route.path) >= 2 and self.route.path[0] == self.position)
 
-    def uses_state_planner(self) -> bool:
-        """Drones or keycards need the state-graph planner; old missions keep the tile one."""
-        return bool(self.mission.drones) or self.mission.has_keycard
-
     def search(self, goal) -> RouteResult:
-        if self.uses_state_planner():
-            blocked = set(self.sealed_tiles)
-            if self.lasers_on:
-                blocked |= set(self.mission.laser_tiles())
-            blocked.discard(self.position)
-            ctx = PlanContext(self.mission.grid, self.tile_costs, self.mission.drones, blocked)
-            return plan_state_route(ctx, self.position, goal, self.clock, self.has_key,
-                                    self.freeze_left)
-        return find_shortest_path(self.mission.grid, self.position, goal,
-                                  self.tile_costs, self.blocked_tiles())
+        """Dijkstra on the state graph from where we are now (see core/state_planner.py)."""
+        ctx = PlanContext(self.mission.grid, self.tile_costs, self.mission.drones,
+                          self.blocked_tiles())
+        return plan_state_route(ctx, self.position, goal, self.clock, self.has_key)
 
     def plan_route(self) -> RouteResult:
-        """Run Dijkstra from the current position to the current target.
+        """Plan the cheapest safe route to the current target.
 
         If the lasers block every route, plan to the terminal instead.
         Pro mode has no route guidance at all.
@@ -293,8 +221,8 @@ class MissionRun:
         """Move one tile (or wait when target is the current tile).
 
         Without a target, follow the planned route. Every move in the game
-        goes through here, so walls, sealed gates, locked doors and active
-        lasers can never be entered.
+        goes through here, so walls, locked doors and active lasers can never
+        be entered.
         """
         if not self.is_active:
             return StepResult(False, "The mission is not active.")
@@ -307,8 +235,6 @@ class MissionRun:
         if target != old_pos:
             if abs(target[0] - old_pos[0]) + abs(target[1] - old_pos[1]) != 1:
                 return StepResult(False, "You can only move one tile up, down, left or right.")
-            if target in self.sealed_tiles:
-                return StepResult(False, "That gate is sealed.")
             if not is_walkable(self.mission.grid, target, self.tile_costs):
                 return StepResult(False, "A wall blocks the way.")
             tile = self.mission.tile_at(target)
@@ -322,10 +248,7 @@ class MissionRun:
 
         # The turn happens: move (or wait), pay the effort, drones advance.
         old_clock = self.clock
-        new_clock = self.next_clock()
-        if self.freeze_left > 0:
-            self.freeze_left = self.freeze_left - 1
-        self.clock = new_clock
+        self.clock = self.clock + 1
         self.effort = self.effort + self.step_cost(old_pos, target)
         self.position = target
         self.moves = self.moves + 1
@@ -348,15 +271,10 @@ class MissionRun:
 
         # Drone check: seen in a vision cone, or walked through a drone.
         if self.mission.drones and is_detected(self.mission.drones, self.mission.grid,
-                                               old_pos, target, old_clock, new_clock):
-            if SHIELD in self.kit_ids and not self.shield_used:
-                self.shield_used = True
-                self.route = None
-                return StepResult(True, "Spotted - the Shield Patch scrambled the scan. Move!",
-                                  shielded=True, picked_key=picked_key)
+                                               old_pos, target, old_clock, self.clock):
             self.status = CAUGHT
             self.route = None
-            self.spotted_by = self.drone_that_sees(old_pos, target, old_clock, new_clock)
+            self.spotted_by = self.drone_that_sees(old_pos, target, old_clock, self.clock)
             logger.info("Caught by %s", self.spotted_by)
             return StepResult(True, f"Spotted by the {self.spotted_by}!", caught=True,
                               picked_key=picked_key)
@@ -384,17 +302,10 @@ class MissionRun:
                                       f"{self.puzzle_seed}-{self.run_token}")
         return self.puzzle
 
-    def lens_hint(self) -> str:
-        """Clue Lens shows the target answer of the terminal puzzle."""
-        if LENS in self.kit_ids and self.puzzle is not None:
-            return self.puzzle.hint()
-        return ""
-
     def submit_terminal(self, answer) -> tuple:
         """Check the player's answer. Returns (solved, message).
 
-        A wrong answer costs TERMINAL_PENALTY effort (a lockout), except the
-        first one when the Repair Module is carried.
+        A wrong answer costs TERMINAL_PENALTY effort (a lockout).
         """
         if not self.can_hack():
             return False, "There is no terminal to hack here."
@@ -405,9 +316,6 @@ class MissionRun:
             logger.info("Terminal solved")
             return True, message
         self.wrong_answers = self.wrong_answers + 1
-        if REPAIR in self.kit_ids and not self.repair_used:
-            self.repair_used = True
-            return False, message + " The Repair Module absorbed the lockout."
         self.effort = self.effort + config.TERMINAL_PENALTY
         return False, message + f" Lockout: +{config.TERMINAL_PENALTY} effort."
 
@@ -417,40 +325,20 @@ class MissionRun:
                 and self.position == self.mission.objective)
 
     def collect_objective(self) -> bool:
-        """Pick up the objective. Returns True if the alert fired because of it."""
+        """Pick up the objective. Returns True if it was collected."""
         if not self.can_collect():
             return False
         self.objective_collected = True
         self.status = OBJECTIVE_SECURED
         self.route = None              # the target changed, old route is stale
         logger.info("Objective collected in %s", self.mission.mission_id)
-        if self.mission.has_alert and not self.alert_triggered:
-            self.trigger_alert()
-            return True
-        return False
-
-    def can_trigger_alert(self) -> bool:
-        return self.mission.has_alert and not self.alert_triggered and self.is_active
-
-    def trigger_alert(self) -> bool:
-        """Seal the relay gate (at most once per run) and re-plan at once."""
-        if not self.can_trigger_alert():
-            return False
-        self.alert_triggered = True
-        self.sealed_tiles.add(self.mission.gate)
-        self.route = None              # never keep following a stale path
-        logger.info("Alert: gate %s sealed", self.mission.gate)
-        self.plan_route()
         return True
 
     # ------------------------------------------------------------ ending
     def complete(self) -> None:
         self.status = COMPLETED
         self.route = None
-        self.score = calculate_score(self.chosen_usefulness, self.best_usefulness,
-                                     self.effort, self.alert_triggered, self.carries_decoy,
-                                     pro_mode=self.pro_mode,
-                                     risk_bonus=self.mission.risk_bonus)
+        self.score = calculate_score(self.effort, self.mission.risk_bonus, self.pro_mode)
         logger.info("Mission %s completed, score %d", self.mission.mission_id,
                     self.score.total)
 
@@ -488,8 +376,8 @@ class MissionRun:
             "score": score,
             "moves": self.moves,
             "route_cost": self.effort,
-            "kit_summary": self.kit_text,
-            "alert_triggered": self.alert_triggered,
+            "kit_summary": NO_KIT,            # legacy column (no gadgets any more)
+            "alert_triggered": False,         # legacy column (no Relay alert any more)
             "pro_mode": self.pro_mode,
         }
 

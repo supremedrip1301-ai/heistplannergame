@@ -23,20 +23,21 @@ WINDOW_HEIGHT = 760
 MIN_WIDTH = 1000
 MIN_HEIGHT = 680
 
-KIT_CAPACITY = 8              # energy units every kit may use
 AUTO_TRAVEL_DELAY_MS = 220    # delay between two animated steps
 DEFAULT_PLAYER_NAME = "Agent"
 MAX_PLAYER_NAME_LENGTH = 30
 HISTORY_LIMIT = 100
 
-# Hard missions
-DECOY_FREEZE_TURNS = 3        # Signal Decoy freezes every drone for this many turns
 TERMINAL_PENALTY = 5          # effort added by a wrong terminal answer (lockout)
+
+# Fixed score bonus per mission: the drone missions need long routes, and
+# 5 points are taken off per effort unit, so a perfect run still earns a
+# good rank (see core/scoring.py).
+RISK_BONUS = {"vault": 300, "lab": 500, "penthouse": 500}
 
 # Tile costs (cost of ENTERING a tile).
 FLOOR_COST = 1
 STATIC_FIELD_COST = 4
-STATIC_FIELD_COST_WITH_BOOTS = 2
 
 VALID_BACKENDS = ("sqlite", "oracle")
 

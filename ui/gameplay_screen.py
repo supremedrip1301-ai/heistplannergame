@@ -24,7 +24,7 @@ STATUS_TEXT = {
 
 ARROW_KEYS = {"Up": (-1, 0), "Right": (0, 1), "Down": (1, 0), "Left": (0, -1)}
 SHORTCUTS = {"p": "plan", "space": "step", "a": "auto", "Escape": "stop", "c": "collect",
-             "w": "wait", "h": "hack", "d": "decoy"}
+             "w": "wait", "h": "hack"}
 FINISH_DELAY_MS = 600       # short pause on the extraction tile before the debrief
 
 
@@ -71,7 +71,7 @@ class GameplayScreen(BaseScreen):
         info.columnconfigure(1, weight=1)
         self.rows = {}
         names = ("Player", "Objective", "Position", "Route", "Guidance", "Moves", "Effort",
-                 "Status", "Kit", "Security", "Event")
+                 "Status", "Security", "Event")
         for i, name in enumerate(names):
             self.rows[name] = InfoRow(info, i, name, wraplength=215)
 
@@ -92,8 +92,6 @@ class GameplayScreen(BaseScreen):
             ("wait", "Wait  [W]", self.wait_turn, 2, 0, "TButton"),
             ("collect", "Collect Objective  [C]", self.collect, 2, 1, "Accent.TButton"),
             ("hack", "Hack Terminal  [H]", self.open_terminal, 3, 0, "Accent.TButton"),
-            ("alert", "Trigger Alert", self.trigger_alert, 3, 1, "Danger.TButton"),
-            ("decoy", "Deploy Decoy  [D]", self.deploy_decoy, 3, 1, "TButton"),
             ("restart", "Restart Mission", self.restart, 4, 0, "TButton"),
             ("menu", "Return to Menu", self.return_to_menu, 4, 1, "TButton"),
         ]
@@ -121,16 +119,16 @@ class GameplayScreen(BaseScreen):
         pro = "  ·  PRO MODE" if run.pro_mode else ""
         self.map_title.configure(text=f"{mission.name}  ·  {mission.difficulty}{pro}")
         self.mission_label.configure(text=mission.name)
-        self.legend.show_for(mission)
-        # Trigger Alert (Relay) and Deploy Decoy (drone missions) share one slot.
-        self.show_button("alert", mission.has_alert)
-        self.show_button("decoy", bool(mission.drones))
-        self.show_button("hack", mission.has_terminal)
+        self.legend.show_for(mission, show_preview=not run.pro_mode)
+        if mission.has_terminal:
+            self.buttons["hack"].grid()
+        else:
+            self.buttons["hack"].grid_remove()
         if from_terminal:
             self.set_message(self.app.terminal_message, warn=not run.terminal_solved)
         elif run.pro_mode:
-            self.set_message("Pro mode: no route guidance. Read the drones, move with the "
-                             "arrow keys and use Wait [W].")
+            self.set_message("Pro mode: no route guidance and no preview. Read the drones, "
+                             "move with the arrow keys and use Wait [W].")
         else:
             self.set_message("Press Plan Route to see the safest way to your target.")
         if run.pro_mode:
@@ -138,12 +136,6 @@ class GameplayScreen(BaseScreen):
         else:
             self.hint.configure(text="Arrow keys move one tile by hand.")
         self.refresh()
-
-    def show_button(self, name: str, visible: bool) -> None:
-        if visible:
-            self.buttons[name].grid()
-        else:
-            self.buttons[name].grid_remove()
 
     def on_hide(self) -> None:
         self.cancel_timers()
@@ -247,9 +239,7 @@ class GameplayScreen(BaseScreen):
             token = run.run_token
             self.finish_id = self.after(FINISH_DELAY_MS, lambda: self.open_debrief(token))
             return True
-        if result.shielded:
-            self.set_message(result.reason, warn=True)
-        elif result.picked_key:
+        if result.picked_key:
             self.set_message("Keycard acquired — locked doors will open for you.")
         elif run.can_hack():
             self.set_message("You reached the terminal. Press Hack Terminal [H].")
@@ -305,41 +295,9 @@ class GameplayScreen(BaseScreen):
         run = self.run
         if run is None or not run.can_collect():
             return
-        alert_fired = run.collect_objective()
-        name = run.mission.objective_name
-        if alert_fired:
-            self.after_alert(f"The {name} is yours — but an ALERT sealed the relay "
-                             "gate! Route to extraction recalculated.")
-        else:
-            self.set_message(f"The {name} is secured. Now plan your route to extraction.")
-            self.refresh()
-
-    def trigger_alert(self) -> None:
-        run = self.run
-        if run is None or not run.can_trigger_alert():
-            return
-        self.stop_auto_travel()
-        run.trigger_alert()
-        self.after_alert("ALERT raised early — the relay gate is sealed. "
-                         "Route recalculated.")
-
-    def after_alert(self, text: str) -> None:
-        """The engine already sealed the gate and re-planned; show the result."""
-        self.cancel_timers()
-        if self.run.status == ge.NO_ROUTE:
-            self.no_route()
-        else:
-            self.set_message(text, warn=True)
-        self.refresh()
-
-    def deploy_decoy(self) -> None:
-        run = self.run
-        if run is None or not run.can_deploy_decoy():
-            return
-        self.stop_auto_travel()
-        run.deploy_decoy()
-        self.set_message(f"Decoy deployed: every drone is frozen for "
-                         f"{config.DECOY_FREEZE_TURNS} turns. Plan again!", warn=True)
+        run.collect_objective()
+        self.set_message(f"The {run.mission.objective_name} is secured. Now get to "
+                         "extraction.")
         self.refresh()
 
     def open_terminal(self) -> None:
@@ -389,8 +347,8 @@ class GameplayScreen(BaseScreen):
         self.message.configure(text=text, style="PanelWarn.TLabel" if warn
                                else "PanelDim.TLabel")
 
-    def security_text(self) -> tuple:
-        """Keycard, lasers, drones and gadget charges in one short line."""
+    def security_text(self) -> str:
+        """Keycard, lasers and drones in one short line."""
         run = self.run
         mission = run.mission
         parts = []
@@ -399,16 +357,8 @@ class GameplayScreen(BaseScreen):
         if mission.has_terminal:
             parts.append("Lasers OFF" if run.terminal_solved else "Lasers ON")
         if mission.drones:
-            if run.freeze_left > 0:
-                parts.append(f"Drones frozen ({run.freeze_left})")
-            else:
-                parts.append(f"{len(mission.drones)} drones patrolling")
-        if "shield" in run.kit_ids:
-            parts.append("Shield used" if run.shield_used else "Shield ready")
-        if not parts:
-            return "-", "PanelValue.TLabel"
-        style = "PanelWarn.TLabel" if mission.drones else "PanelValue.TLabel"
-        return "  ·  ".join(parts), style
+            parts.append(f"{len(mission.drones)} drones patrolling")
+        return "  ·  ".join(parts) if parts else "-"
 
     def refresh(self) -> None:
         """Update every sidebar value and every button state, then redraw the map."""
@@ -439,18 +389,12 @@ class GameplayScreen(BaseScreen):
         if run.status == ge.CAUGHT and run.spotted_by:
             text = f"Spotted by the {run.spotted_by}"
         self.rows["Status"].set(text, style)
-        self.rows["Kit"].set(run.kit_text)
-        self.rows["Security"].set(*self.security_text())
-        if run.alert_triggered:
-            self.rows["Event"].set("ALERT — relay gate sealed, route recalculated",
-                                   "PanelAlert.TLabel")
-        elif run.is_caught():
+        self.rows["Security"].set(self.security_text(), "PanelWarn.TLabel")
+        if run.is_caught():
             self.rows["Event"].set("Mission failed", "PanelAlert.TLabel")
-        elif run.weak_point_visible:
-            self.rows["Event"].set("All clear — weak point spotted at the relay gate",
-                                   "PanelWarn.TLabel")
-        elif run.mission.drones and run.position in run.watched_next_turn():
-            self.rows["Event"].set("Scanner: a drone looks HERE next turn!",
+        elif (not run.pro_mode and run.is_active
+              and run.position in run.watched_next_turn()):
+            self.rows["Event"].set("Danger: a drone looks HERE next turn!",
                                    "PanelAlert.TLabel")
         else:
             self.rows["Event"].set("All clear", "PanelGood.TLabel")
@@ -466,8 +410,6 @@ class GameplayScreen(BaseScreen):
         self.set_enabled("wait", active and not auto)
         self.set_enabled("collect", run.can_collect() and not auto)
         self.set_enabled("hack", run.can_hack() and not auto)
-        self.set_enabled("alert", run.can_trigger_alert())
-        self.set_enabled("decoy", run.can_deploy_decoy())
         self.set_enabled("restart", run.status != ge.COMPLETED)
         self.set_enabled("menu", run.status != ge.COMPLETED)
         self.map_view.show_run(run)

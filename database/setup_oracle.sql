@@ -158,30 +158,8 @@ CREATE TABLE hp_run_audit (
 CREATE SEQUENCE hp_audit_seq START WITH 1 INCREMENT BY 1 NOCACHE;
 
 PROMPT Seeding missions with MERGE (re-running never duplicates rows) ...
-
-MERGE INTO hp_missions m
-USING (SELECT 'archive' AS mission_id, 'The Archive' AS mission_name,
-              'Easy' AS difficulty FROM dual) s
-   ON (m.mission_id = s.mission_id)
- WHEN MATCHED THEN UPDATE SET m.mission_name = s.mission_name, m.difficulty = s.difficulty
- WHEN NOT MATCHED THEN INSERT (mission_id, mission_name, difficulty)
-                       VALUES (s.mission_id, s.mission_name, s.difficulty);
-
-MERGE INTO hp_missions m
-USING (SELECT 'gallery' AS mission_id, 'The Gallery' AS mission_name,
-              'Medium' AS difficulty FROM dual) s
-   ON (m.mission_id = s.mission_id)
- WHEN MATCHED THEN UPDATE SET m.mission_name = s.mission_name, m.difficulty = s.difficulty
- WHEN NOT MATCHED THEN INSERT (mission_id, mission_name, difficulty)
-                       VALUES (s.mission_id, s.mission_name, s.difficulty);
-
-MERGE INTO hp_missions m
-USING (SELECT 'relay' AS mission_id, 'The Relay' AS mission_name,
-              'Hard' AS difficulty FROM dual) s
-   ON (m.mission_id = s.mission_id)
- WHEN MATCHED THEN UPDATE SET m.mission_name = s.mission_name, m.difficulty = s.difficulty
- WHEN NOT MATCHED THEN INSERT (mission_id, mission_name, difficulty)
-                       VALUES (s.mission_id, s.mission_name, s.difficulty);
+-- Only the three current missions. Databases created by older versions may still
+-- contain 'archive', 'gallery' and 'relay'; they are kept so old runs stay readable.
 
 MERGE INTO hp_missions m
 USING (SELECT 'vault' AS mission_id, 'The Vault' AS mission_name,
@@ -430,8 +408,8 @@ PROMPT Setup finished. Run database/oracle_manual_test.sql to try everything.
 -- DECLARE
 --     v_run_id NUMBER;
 -- BEGIN
---     hp_save_run('DemoAgent', 'gallery', 'SUCCESS', 810, 24, 28,
---                 'Pocket Scanner, Mobility Boots, Repair Module', 'N', 'N', v_run_id);
+--     hp_save_run('DemoAgent', 'vault', 'SUCCESS', 880, 44, 44,
+--                 'None', 'N', 'N', v_run_id);
 --     DBMS_OUTPUT.PUT_LINE('Saved run ' || v_run_id);
 -- END;
 -- /
