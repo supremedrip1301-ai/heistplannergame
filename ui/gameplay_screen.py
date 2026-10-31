@@ -4,10 +4,11 @@ Every move goes through the MissionRun engine; this screen only reacts to
 buttons and keys, calls the engine, and redraws.
 
 Real-time clock: every config.TICK_MS (0.5 s) tick() runs one turn. The drones
-advance one tile, and the player makes the move chosen since the last tick
-(an arrow key, Move Next Step, or Auto Travel) or stands still. Once the player
-has planned a route, Dijkstra re-plans it on every tick where it went out of
-date, so the route on the map always matches where the drones are now.
+advance one tile, and the player takes the next route step if Move Next Step or
+Auto Travel asked for it. Arrow keys move the player at once, without waiting
+for the clock. Once the player has planned a route, Dijkstra re-plans it
+whenever it went out of date, so the route on the map always matches where the
+player and the drones are now.
 """
 
 from tkinter import messagebox, ttk
@@ -48,7 +49,7 @@ class GameplayScreen(BaseScreen):
         self.tick_id = None           # pending clock tick
         self.finish_id = None         # pending "go to debrief" callback
         self.auto_running = False     # Auto Travel: follow the route on every tick
-        self.queued = None            # move for the next tick: a tile or FOLLOW_ROUTE
+        self.queued = None            # FOLLOW_ROUTE: take a route step on the next tick
         self.guided = False           # a route was planned: keep re-planning it live
         self.paused = False
 
@@ -147,11 +148,11 @@ class GameplayScreen(BaseScreen):
             else:
                 self.set_message("Press Plan Route to see the safest way to your target.")
         if run.pro_mode:
-            self.hint.configure(text="Drones move every 0.5 s. Arrow keys: one tile per "
-                                     "tick. No key = stand still. Enter pauses.")
+            self.hint.configure(text="Drones move every 0.5 s. Arrow keys move you at once. "
+                                     "Enter pauses.")
         else:
-            self.hint.configure(text="Drones move every 0.5 s. Arrow keys: one tile per "
-                                     "tick. Enter pauses.")
+            self.hint.configure(text="Drones move every 0.5 s. Arrow keys move you at once. "
+                                     "Enter pauses.")
         self.refresh()
         self.start_clock()
 
@@ -202,7 +203,10 @@ class GameplayScreen(BaseScreen):
         elif key in ARROW_KEYS and not self.auto_running and self.run.is_active:
             d_row, d_col = ARROW_KEYS[key]
             row, col = self.run.position
-            self.queued = (row + d_row, col + d_col)     # made on the next tick
+            self.queued = None
+            if self.do_step((row + d_row, col + d_col), instant=True):
+                self.replan_if_guided()
+                self.refresh()
 
     # ------------------------------------------------------------ clock
     def start_clock(self) -> None:
@@ -230,10 +234,8 @@ class GameplayScreen(BaseScreen):
             return
         if self.auto_running or self.queued == FOLLOW_ROUTE:
             target = None if run.has_valid_route() else run.position
-        elif self.queued is not None:
-            target = self.queued
         else:
-            target = run.position                     # no key pressed: stand still
+            target = run.position                     # the player stands still
         self.queued = None
         self.do_step(target)
         if run is not self.run or not run.is_active:
@@ -285,16 +287,22 @@ class GameplayScreen(BaseScreen):
             self.start_clock()
         self.refresh()
 
-    def do_step(self, target) -> bool:
-        """One tick in the engine; report a refusal; handle the outcome.
+    def do_step(self, target, instant: bool = False) -> bool:
+        """One move in the engine; report a refusal; handle the outcome.
 
-        A refused move (wall, locked door, laser) still uses up the tick:
-        the player stands still while the drones move.
+        instant=True is an arrow key (run.move_now, no tick). Otherwise this is
+        a tick: a refused route step still uses up the tick, the player stands
+        still while the drones move.
         """
         run = self.run
         old_pos = run.position
-        result = run.step(target)
+        result = run.move_now(target) if instant else run.step(target)
         refused = not result.ok
+        if refused and instant:
+            if result.reason:
+                self.set_message(result.reason, warn=True)
+                self.refresh()
+            return False
         if refused:
             self.set_message(result.reason, warn=True)
             self.auto_running = False

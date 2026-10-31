@@ -11,10 +11,12 @@ Status flow
 
 Turns (real time)
     The game clock ticks every config.TICK_MS (0.5 s). The UI calls step()
-    exactly once per tick: with the move the player chose since the last tick,
-    or with the current tile when no key was pressed (a wait). In the same turn
-    the patrol drones advance one tile, then the engine checks whether any drone
-    can see the player. So one tick is one edge of the planner's state graph.
+    exactly once per tick: the patrol drones advance one tile and the engine
+    checks whether any drone can see the player. On that tick the player can
+    also take one step of the planned route (Move Next Step, Auto Travel), so
+    a guided tick is exactly one edge of the planner's state graph.
+    Arrow keys do not wait for the clock: move_now() moves the player at once,
+    between two ticks, and checks the drones where they are right now.
 """
 
 import logging
@@ -106,6 +108,7 @@ class MissionRun:
         self.puzzle = None                         # created when the terminal is opened
         self.wrong_answers = 0
         self.spotted_by = ""                       # name of the drone that caught us
+        self.moved_this_tick = False               # an arrow-key move since the last tick
 
     def restart(self) -> None:
         """Start the same mission again (drones, keycard, lasers and puzzle reset)."""
@@ -229,10 +232,9 @@ class MissionRun:
         return self.step(self.position)
 
     def step(self, target=None) -> StepResult:
-        """One tick of the game clock: move one tile, or wait when target is
-        the current tile. Without a target, follow the planned route. Every move in the game
-        goes through here, so walls, locked doors and active lasers can never
-        be entered.
+        """One tick of the game clock: the drones advance one tile, and the
+        player moves to target at the same time (or waits when target is the
+        current tile). Without a target, follow the planned route.
         """
         if not self.is_active:
             return StepResult(False, "The mission is not active.")
@@ -242,16 +244,9 @@ class MissionRun:
             target = self.route.path[1]
 
         old_pos = self.position
-        if target != old_pos:
-            if abs(target[0] - old_pos[0]) + abs(target[1] - old_pos[1]) != 1:
-                return StepResult(False, "You can only move one tile up, down, left or right.")
-            if not is_walkable(self.mission.grid, target, self.tile_costs):
-                return StepResult(False, "A wall blocks the way.")
-            tile = self.mission.tile_at(target)
-            if tile == LASER and self.lasers_on:
-                return StepResult(False, "Laser barrier - hack the terminal to switch it off.")
-            if tile == DOOR and not self.has_key:
-                return StepResult(False, "Locked door - you need the keycard.")
+        problem = self.move_problem(target)
+        if problem:
+            return StepResult(False, problem)
 
         # Is this move the next step of the planned route? (checked before moving)
         following = self.has_valid_route() and self.route.path[1] == target
@@ -259,21 +254,69 @@ class MissionRun:
         # The turn happens: move (or wait), pay the effort, drones advance.
         old_clock = self.clock
         self.clock = self.clock + 1
-        self.effort = self.effort + self.step_cost(old_pos, target)
-        self.position = target
         if target != old_pos:
-            self.moves = self.moves + 1
-            if self.status == PLANNING:
-                self.status = IN_PROGRESS
-        elif self.status != PLANNING:
-            self.waits = self.waits + 1    # ticks before the first move are not counted
+            self.enter(target)
+        elif self.status != PLANNING and not self.moved_this_tick:
+            self.waits = self.waits + 1    # a tick spent standing still
+        self.moved_this_tick = False
 
         if following:
             self.route = RouteResult(self.route.path[1:], None, True)
             self.route.cost = self.remaining_route_cost()
         else:
             self.route = None          # the player left the planned route
+        return self.after_move(old_pos, target, old_clock)
 
+    def move_now(self, target) -> StepResult:
+        """Arrow key: move one tile at once, between two ticks.
+
+        The drones do not move, so the player is caught only if the new tile
+        is in a drone's view right now. The planned route is dropped (its
+        timing assumed one step per tick); the UI re-plans it from here.
+        """
+        if not self.is_active:
+            return StepResult(False, "The mission is not active.")
+        old_pos = self.position
+        if target == old_pos:
+            return StepResult(False, "")
+        problem = self.move_problem(target)
+        if problem:
+            return StepResult(False, problem)
+        self.enter(target)
+        self.moved_this_tick = True
+        self.route = None
+        return self.after_move(old_pos, target, self.clock)
+
+    def move_problem(self, target) -> str:
+        """Why the player cannot step onto target now ('' if the move is allowed).
+
+        Every move in the game is checked here, so walls, locked doors and
+        active lasers can never be entered.
+        """
+        old_pos = self.position
+        if target == old_pos:
+            return ""
+        if abs(target[0] - old_pos[0]) + abs(target[1] - old_pos[1]) != 1:
+            return "You can only move one tile up, down, left or right."
+        if not is_walkable(self.mission.grid, target, self.tile_costs):
+            return "A wall blocks the way."
+        tile = self.mission.tile_at(target)
+        if tile == LASER and self.lasers_on:
+            return "Laser barrier - hack the terminal to switch it off."
+        if tile == DOOR and not self.has_key:
+            return "Locked door - you need the keycard."
+        return ""
+
+    def enter(self, target) -> None:
+        """Stand on target: pay its effort and count the move."""
+        self.effort = self.effort + self.step_cost(self.position, target)
+        self.position = target
+        self.moves = self.moves + 1
+        if self.status == PLANNING:
+            self.status = IN_PROGRESS
+
+    def after_move(self, old_pos, target, old_clock) -> StepResult:
+        """Keycard, drone check and extraction after the player stood on target."""
         picked_key = False
         if self.mission.tile_at(target) == KEYCARD and not self.has_key:
             self.has_key = True

@@ -22,12 +22,12 @@ HOW_TO_PLAY = [
      "where the drones will look on the next tick. Standing still lets a patrol pass. "
      "Enter pauses the game."),
     ("3. Plan and move",
-     "You move at most one tile per tick: an arrow key makes its move on the next tick. "
-     "Plan Route draws the cheapest route that no drone can see, including the ticks "
+     "Arrow keys move you one tile at once, as fast as you press them. Plan Route draws "
+     "the cheapest route that no drone can see, one step per tick, including the ticks "
      "you must stand still (amber number badges). Once planned, the route follows you: "
      "whenever it is out of date (you stopped, or went another way) Dijkstra plans it "
-     "again from where you are now. Move Next Step takes one step of the route; Auto "
-     "Travel walks the whole route; Stop ends Auto Travel."),
+     "again from where you are now. Move Next Step takes one step of the route on the "
+     "next tick; Auto Travel walks the whole route; Stop ends Auto Travel."),
     ("Effort",
      "Each floor tile costs 1 effort and static fields cost 4. Standing still is free, "
      "so take your time - but only where no drone will look. The planner looks for the "
