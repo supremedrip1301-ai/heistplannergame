@@ -72,7 +72,7 @@ def draw_tile(canvas, x0, y0, size, char, flags=(), detail=True):
                                     fill=styles.KEYCARD, outline="")
             if detail:
                 canvas.create_rectangle(cx - w / 2, cy - h / 6, cx + w / 2, cy,
-                                        fill=styles.TEXT_DARK, outline="")
+                                        fill=styles.TEXT_ON_ACCENT, outline="")
 
     elif char == m.DOOR:
         if UNLOCKED in flags:
@@ -210,7 +210,7 @@ class MapView(tk.Canvas):
             for row, col in run.watched_now():
                 self.create_rectangle(ox + col * size, oy + row * size,
                                       ox + (col + 1) * size, oy + (row + 1) * size,
-                                      fill=styles.VISION, stipple="gray25", outline="")
+                                      fill=styles.VISION, stipple=styles.VISION_STIPPLE, outline="")
             # Preview: amber outlines where the drones will look after the next
             # turn (switched off in Pro mode, where you must read the patrols).
             if not run.pro_mode and run.is_active:
@@ -243,7 +243,7 @@ class MapView(tk.Canvas):
                 by = oy + row * size + badge + 1
                 self.create_oval(bx - badge, by - badge, bx + badge, by + badge,
                                  fill=styles.AMBER, outline="")
-                self.create_text(bx, by, text=str(count), fill=styles.TEXT_DARK,
+                self.create_text(bx, by, text=str(count), fill=styles.TEXT_ON_ACCENT,
                                  font=styles.font(max(7, badge), "bold"))
             # Target ring at the end of the route.
             x, y = centre(run.route.path[-1])
@@ -313,7 +313,7 @@ class Legend(tk.Canvas):
             items.append(("drone", (), "Drone"))
             items.append(("vision", (), "Drone vision"))
             if self.show_preview:
-                items.append(("next", (), "Next-turn vision"))
+                items.append(("next", (), "Next-tick vision"))
         items.append(("route", (), "Planned route"))
         items.append(("you", (), "You"))
         return items
@@ -343,7 +343,7 @@ class Legend(tk.Canvas):
                 self.create_rectangle(x, y, x + swatch, y + swatch, fill=styles.TILE_FLOOR,
                                       outline=styles.TILE_FLOOR_EDGE)
                 self.create_rectangle(x, y, x + swatch, y + swatch, fill=styles.VISION,
-                                      stipple="gray25", outline="")
+                                      stipple=styles.VISION_STIPPLE, outline="")
             elif char == "next":
                 self.create_rectangle(x, y, x + swatch, y + swatch, fill=styles.TILE_FLOOR,
                                       outline=styles.TILE_FLOOR_EDGE)

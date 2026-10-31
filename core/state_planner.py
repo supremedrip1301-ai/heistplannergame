@@ -4,7 +4,7 @@ On a plain map a vertex is simply a tile (core/pathfinding.py). In these
 missions that is not enough, because whether a move is safe depends on more
 than where you stand:
 
-    * WHEN you move  - drones are somewhere else at every turn
+    * WHEN you move  - drones are somewhere else at every tick (0.5 s)
     * WHAT you carry - a locked door opens only if you hold the keycard
 
 So a vertex here is a state:
@@ -15,7 +15,7 @@ drone_clock is the turn number modulo the drone period (the LCM of all
 patrol lengths; core/drones.py), because after that many turns every drone
 is back where it started and the situation repeats exactly.
 
-Edges (one player turn each)
+Edges (one tick of the game clock each)
     * move up / right / down / left  - cost = cost of the tile entered
     * wait on the spot               - cost = WAIT_COST
     An edge is left out if it walks into a wall, a sealed tile, a locked door

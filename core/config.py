@@ -23,7 +23,7 @@ WINDOW_HEIGHT = 760
 MIN_WIDTH = 1000
 MIN_HEIGHT = 680
 
-AUTO_TRAVEL_DELAY_MS = 220    # delay between two animated steps
+TICK_MS = 500                 # game clock: drones advance one tile every 0.5 seconds
 DEFAULT_PLAYER_NAME = "Agent"
 MAX_PLAYER_NAME_LENGTH = 30
 HISTORY_LIMIT = 100

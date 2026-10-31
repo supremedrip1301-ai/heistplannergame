@@ -7,51 +7,53 @@ constant, so no hex code is repeated across files.
 import tkinter.font as tkfont
 from tkinter import ttk
 
-# ---------------------------------------------------------------- base palette
-BG = "#0B1220"            # window background
-PANEL = "#141E2E"         # main panels
-PANEL_ALT = "#1C2A3F"     # cards, raised areas
-BORDER = "#2A3A52"
-HOVER = "#24364F"
-TEXT = "#E6EDF3"
-TEXT_DIM = "#8B9BB4"
-TEXT_DARK = "#0B1220"     # text on bright buttons
+# ---------------------------------------------------------------- base palette (light theme)
+BG = "#F3F5F9"            # window background
+PANEL = "#FFFFFF"         # main panels
+PANEL_ALT = "#EBEFF5"     # cards, raised areas
+BORDER = "#C8D1DD"
+HOVER = "#DDE4EE"
+TEXT = "#1B2433"
+TEXT_DIM = "#5A6779"
+TEXT_ON_ACCENT = "#FFFFFF"   # text on coloured buttons and badges
 
-ACCENT = "#2EC4B6"        # teal: navigation, selection, route
-ACCENT_DARK = "#1F8A80"
-ACCENT_SOFT = "#163B44"
-AMBER = "#E9A23B"         # warnings, static fields
-GREEN = "#3DDC84"         # success, extraction
-RED = "#E5484D"           # drones, failure
-DISABLED_BG = "#1A2433"
-DISABLED_FG = "#56657C"
+ACCENT = "#0E8C80"        # teal: navigation, selection, route
+ACCENT_DARK = "#0A6B62"
+ACCENT_HOVER = "#12A394"
+ACCENT_SOFT = "#D3F0EC"
+AMBER = "#B86E00"         # warnings, static fields
+GREEN = "#14803C"         # success, extraction
+RED = "#D42F35"           # drones, failure
+DISABLED_BG = "#E4E8EE"
+DISABLED_FG = "#9AA4B2"
 
 # ---------------------------------------------------------------- map tiles
-TILE_WALL = "#273449"
-TILE_WALL_EDGE = "#33445E"
-TILE_FLOOR = "#121B2A"
-TILE_FLOOR_EDGE = "#1A2638"
-TILE_STATIC = "#3A2C12"
+TILE_WALL = "#3C4A5E"
+TILE_WALL_EDGE = "#4E5D73"
+TILE_FLOOR = "#FAFBFD"
+TILE_FLOOR_EDGE = "#DCE2EA"
+TILE_STATIC = "#FBE7C2"
 TILE_STATIC_MARK = AMBER
-TILE_START = "#16323A"
-TILE_EXTRACTION = "#123825"
-TILE_OBJECTIVE = "#2A2A12"
+TILE_START = "#D3F0EC"
+TILE_EXTRACTION = "#D9F5E2"
+TILE_OBJECTIVE = "#FBF3C7"
 ROUTE = ACCENT
 CHARACTER = ACCENT
-CHARACTER_RING = "#0E4D47"
+CHARACTER_RING = "#C9F1EB"
 # hard-mission tiles and drones
-KEYCARD = "#4EA8DE"
-TILE_DOOR = "#3B2A1A"
-DOOR_FRAME = "#C98A3D"
-TERMINAL_BODY = "#22324A"
+KEYCARD = "#2563EB"
+TILE_DOOR = "#F5E6D3"
+DOOR_FRAME = "#A65A12"
+TERMINAL_BODY = "#CBD5E1"
 TERMINAL_SCREEN = KEYCARD
 LASER_BEAM = RED
 DRONE_BODY = RED
-DRONE_RING = "#5A1A1E"
+DRONE_RING = "#7A1418"
 VISION = RED                 # drawn with a stipple, so the floor stays visible
+VISION_STIPPLE = "gray50"     # dot pattern of the vision tiles (denser on the light floor)
 VISION_NEXT = AMBER          # preview: where drones look after the next turn
-MASTER = "#B57CFF"           # difficulty label colour for "Master"
-EXPERT = "#FF7A45"           # difficulty label colour for "Expert"
+MASTER = "#7C3AED"           # difficulty label colour for "Master"
+EXPERT = "#E0561B"           # difficulty label colour for "Expert"
 
 # ---------------------------------------------------------------- fonts
 FONT_FAMILY = "Segoe UI"   # replaced by a safe fallback in apply_style()
@@ -116,7 +118,7 @@ def apply_style(root) -> ttk.Style:
     style.configure("SelectedDim.TLabel", background=ACCENT_SOFT, foreground=TEXT_DIM,
                     font=font(9))
     style.configure("SelectedHeading.TLabel", background=ACCENT_SOFT, font=font(12, "bold"))
-    style.configure("Tag.TLabel", background=ACCENT, foreground=TEXT_DARK,
+    style.configure("Tag.TLabel", background=ACCENT, foreground=TEXT_ON_ACCENT,
                     font=font(8, "bold"), padding=(6, 1))
     style.configure("Big.TLabel", background=PANEL, font=font(30, "bold"),
                     foreground=ACCENT)
@@ -130,22 +132,22 @@ def apply_style(root) -> ttk.Style:
                           ("active", HOVER)],
               foreground=[("disabled", DISABLED_FG)],
               bordercolor=[("focus", ACCENT)])
-    style.configure("Accent.TButton", background=ACCENT, foreground=TEXT_DARK,
+    style.configure("Accent.TButton", background=ACCENT, foreground=TEXT_ON_ACCENT,
                     font=font(10, "bold"), bordercolor=ACCENT,
                     lightcolor=ACCENT, darkcolor=ACCENT)
     style.map("Accent.TButton",
               background=[("disabled", DISABLED_BG), ("pressed", ACCENT_DARK),
-                          ("active", "#45D6C8")],
+                          ("active", ACCENT_HOVER)],
               foreground=[("disabled", DISABLED_FG)])
     style.configure("Danger.TButton", foreground=RED)
     style.map("Danger.TButton", foreground=[("disabled", DISABLED_FG)])
     style.configure("Big.TButton", font=font(11, "bold"), padding=(18, 9))
-    style.configure("BigAccent.TButton", background=ACCENT, foreground=TEXT_DARK,
+    style.configure("BigAccent.TButton", background=ACCENT, foreground=TEXT_ON_ACCENT,
                     font=font(11, "bold"), padding=(18, 9), bordercolor=ACCENT,
                     lightcolor=ACCENT, darkcolor=ACCENT)
     style.map("BigAccent.TButton",
               background=[("disabled", DISABLED_BG), ("pressed", ACCENT_DARK),
-                          ("active", "#45D6C8")],
+                          ("active", ACCENT_HOVER)],
               foreground=[("disabled", DISABLED_FG)])
 
     # Entry, checkbuttons

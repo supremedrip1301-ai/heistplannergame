@@ -15,18 +15,23 @@ HOW_TO_PLAY = [
      "The Vault (Hard), the Lab (Expert) or the Penthouse (Master). Read the briefing: it "
      "tells you what guards the map. Tick Pro mode if you want no help at all."),
     ("2. Patrol drones",
-     "Every move or Wait is one turn, and after each turn every drone moves one tile "
-     "along its fixed patrol. A drone sees its own tile and two tiles ahead (red tiles); "
-     "walls and locked doors block its view. Stand in a red tile, or walk through a "
-     "drone, and you are caught: the mission fails. Amber outlines show where the drones "
-     "will look after your next turn. Wait [W] lets a patrol pass."),
+     "The game runs in real time: every 0.5 seconds (one tick) every drone moves one tile "
+     "along its fixed patrol, whether you move or not. A drone sees its own tile and two "
+     "tiles ahead (red tiles); walls and locked doors block its view. Stand in a red tile, "
+     "or walk through a drone, and you are caught: the mission fails. Amber outlines show "
+     "where the drones will look on the next tick. Standing still lets a patrol pass. "
+     "Enter pauses the game."),
     ("3. Plan and move",
-     "Plan Route draws the cheapest route that no drone can see, including the turns "
-     "you must wait (amber number badges). Move Next Step walks one turn; Auto Travel walks "
-     "the whole route; Stop pauses it. Arrow keys move one tile by hand."),
+     "You move at most one tile per tick: an arrow key makes its move on the next tick. "
+     "Plan Route draws the cheapest route that no drone can see, including the ticks "
+     "you must stand still (amber number badges). Once planned, the route follows you: "
+     "whenever it is out of date (you stopped, or went another way) Dijkstra plans it "
+     "again from where you are now. Move Next Step takes one step of the route; Auto "
+     "Travel walks the whole route; Stop ends Auto Travel."),
     ("Effort",
-     "Each floor tile costs 1 effort, each Wait costs 1, and static fields cost 4. "
-     "The planner always looks for the lowest total effort, not just the fewest steps."),
+     "Each floor tile costs 1 effort and static fields cost 4. Standing still is free, "
+     "so take your time - but only where no drone will look. The planner looks for the "
+     "lowest total effort, not just the fewest steps."),
     ("4. Keycards, doors and terminals",
      "A locked door opens only once you have walked over the keycard. Laser barriers stay "
      "on until you hack the terminal [H]. The terminal is a Power Relay: draw the lightest "
@@ -38,16 +43,15 @@ HOW_TO_PLAY = [
      "Stand on the objective and press Collect Objective. Your target switches to the "
      "extraction point: plan again and get out."),
     ("Pro mode",
-     "Plan Route, Auto Travel and the amber next-turn preview are switched off. You read "
-     "the patrols yourself and move with the arrow keys and Wait. A Pro run earns +25% "
-     "score."),
+     "Plan Route, Auto Travel and the amber next-tick preview are switched off. You read "
+     "the patrols yourself and move with the arrow keys. A Pro run earns +25% score."),
     ("Score",
      "Success 500 + objective 200 + extraction 100 + high-risk bonus (Vault 300, Lab 500, "
      "Penthouse 500), minus 5 per effort unit; then +25% in Pro mode. "
      "Ranks: Phantom 800+, Specialist 650+, Operative 450+, Rookie below."),
     ("Keyboard",
      "P plan route   •   Space next step   •   A auto travel   •   "
-     "Esc stop   •   C collect   •   W wait   •   H hack terminal   "
+     "Esc stop   •   C collect   •   Enter pause   •   H hack terminal   "
      "•   arrow keys move by hand"),
 ]
 
@@ -120,11 +124,12 @@ class AboutScreen(TextPage):
             ("Active database mode", self.app.db_status),
             ("Route Guidance → Dijkstra's shortest-path algorithm on a state graph",
              "With patrol drones and keycards a tile alone is not enough, so the planner's "
-             "vertex is (tile, drone clock, keycard held). The drone clock is the turn number "
-             "modulo the LCM of all patrol lengths, because the patrols then repeat. Edges are "
-             "the four moves and Wait, with the cost of the tile entered; edges into a drone's "
-             "view are left out. A heapq priority queue gives O((V + E) log V). Tests "
-             "cross-check it with Bellman-Ford and with my matrix Dijkstra (DAA Exp 4)."),
+             "vertex is (tile, drone clock, keycard held). The drone clock is the tick number "
+             "(one tick = 0.5 s) modulo the LCM of all patrol lengths, because the patrols then "
+             "repeat. Edges are one tick each: the four moves and Wait, with the cost of the tile "
+             "entered; edges into a drone's view are left out. A heapq priority queue gives "
+             "O((V + E) log V). Because the drones keep moving in real time, the route is "
+             "re-planned with Dijkstra on every tick where it went out of date."),
             ("Terminal puzzle → Dijkstra is the judge",
              "The Power Relay is a shortest-path problem: each numbered cell is a vertex and "
              "the number is the cost of entering it. Dijkstra computes the minimum load, and "

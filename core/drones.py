@@ -1,4 +1,4 @@
-"""Patrol drones: deterministic sentries that move one tile per player turn.
+"""Patrol drones: deterministic sentries that move one tile per tick (0.5 s).
 
 Because a drone always follows the same patrol, its position at turn t is
 known in advance: position(t) = cycle[t % len(cycle)]. That is what lets the

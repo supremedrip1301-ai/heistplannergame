@@ -2,6 +2,12 @@
 
 Every move goes through the MissionRun engine; this screen only reacts to
 buttons and keys, calls the engine, and redraws.
+
+Real-time clock: every config.TICK_MS (0.5 s) tick() runs one turn. The drones
+advance one tile, and the player makes the move chosen since the last tick
+(an arrow key, Move Next Step, or Auto Travel) or stands still. Once the player
+has planned a route, Dijkstra re-plans it on every tick where it went out of
+date, so the route on the map always matches where the drones are now.
 """
 
 from tkinter import messagebox, ttk
@@ -24,7 +30,8 @@ STATUS_TEXT = {
 
 ARROW_KEYS = {"Up": (-1, 0), "Right": (0, 1), "Down": (1, 0), "Left": (0, -1)}
 SHORTCUTS = {"p": "plan", "space": "step", "a": "auto", "Escape": "stop", "c": "collect",
-             "w": "wait", "h": "hack"}
+             "Return": "pause", "h": "hack"}
+FOLLOW_ROUTE = "route"      # queued action: take the next step of the planned route
 FINISH_DELAY_MS = 600       # short pause on the extraction tile before the debrief
 
 
@@ -38,9 +45,12 @@ class GameplayScreen(BaseScreen):
     def __init__(self, parent, app):
         super().__init__(parent, app)
         self.run = None
-        self.after_id = None          # pending Auto Travel callback
+        self.tick_id = None           # pending clock tick
         self.finish_id = None         # pending "go to debrief" callback
-        self.auto_running = False
+        self.auto_running = False     # Auto Travel: follow the route on every tick
+        self.queued = None            # move for the next tick: a tile or FOLLOW_ROUTE
+        self.guided = False           # a route was planned: keep re-planning it live
+        self.paused = False
 
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=0, minsize=330)
@@ -89,7 +99,7 @@ class GameplayScreen(BaseScreen):
             ("step", "Move Next Step  [Space]", self.move_next_step, 0, 1, "TButton"),
             ("auto", "Auto Travel  [A]", self.start_auto_travel, 1, 0, "TButton"),
             ("stop", "Stop  [Esc]", self.stop_auto_travel, 1, 1, "TButton"),
-            ("wait", "Wait  [W]", self.wait_turn, 2, 0, "TButton"),
+            ("pause", "Pause  [Enter]", self.toggle_pause, 2, 0, "TButton"),
             ("collect", "Collect Objective  [C]", self.collect, 2, 1, "Accent.TButton"),
             ("hack", "Hack Terminal  [H]", self.open_terminal, 3, 0, "Accent.TButton"),
             ("restart", "Restart Mission", self.restart, 4, 0, "TButton"),
@@ -104,7 +114,7 @@ class GameplayScreen(BaseScreen):
                         pady=2)
             self.buttons[key] = button
 
-        self.hint = ttk.Label(side, text="Arrow keys move one tile by hand.",
+        self.hint = ttk.Label(side, text="",
                               style="PanelDim.TLabel", wraplength=290)
         self.hint.grid(row=4, column=0, sticky="w", pady=(6, 0))
 
@@ -126,16 +136,24 @@ class GameplayScreen(BaseScreen):
             self.buttons["hack"].grid_remove()
         if from_terminal:
             self.set_message(self.app.terminal_message, warn=not run.terminal_solved)
-        elif run.pro_mode:
-            self.set_message("Pro mode: no route guidance and no preview. Read the drones, "
-                             "move with the arrow keys and use Wait [W].")
+            self.replan_if_guided()
         else:
-            self.set_message("Press Plan Route to see the safest way to your target.")
+            self.guided = False
+            self.paused = False
+            self.queued = None
+            if run.pro_mode:
+                self.set_message("Pro mode: no route guidance and no preview. Read the "
+                                 "drones and move with the arrow keys.")
+            else:
+                self.set_message("Press Plan Route to see the safest way to your target.")
         if run.pro_mode:
-            self.hint.configure(text="Pro mode: arrow keys to move, W to wait.")
+            self.hint.configure(text="Drones move every 0.5 s. Arrow keys: one tile per "
+                                     "tick. No key = stand still. Enter pauses.")
         else:
-            self.hint.configure(text="Arrow keys move one tile by hand.")
+            self.hint.configure(text="Drones move every 0.5 s. Arrow keys: one tile per "
+                                     "tick. Enter pauses.")
         self.refresh()
+        self.start_clock()
 
     def on_hide(self) -> None:
         self.cancel_timers()
@@ -166,11 +184,9 @@ class GameplayScreen(BaseScreen):
         return True
 
     def cancel_timers(self) -> None:
-        """Cancel every pending after() callback (Stop, Restart, Menu, close)."""
+        """Cancel every pending after() callback (Restart, Menu, terminal, close)."""
         self.auto_running = False
-        if self.after_id is not None:
-            self.after_cancel(self.after_id)
-            self.after_id = None
+        self.stop_clock()
         if self.finish_id is not None:
             self.after_cancel(self.finish_id)
             self.finish_id = None
@@ -183,10 +199,57 @@ class GameplayScreen(BaseScreen):
         if name is not None:
             if self.buttons[name].instate(["!disabled"]) and self.buttons[name].winfo_ismapped():
                 self.buttons[name].invoke()
-        elif key in ARROW_KEYS and not self.auto_running:
+        elif key in ARROW_KEYS and not self.auto_running and self.run.is_active:
             d_row, d_col = ARROW_KEYS[key]
             row, col = self.run.position
-            self.do_step((row + d_row, col + d_col))
+            self.queued = (row + d_row, col + d_col)     # made on the next tick
+
+    # ------------------------------------------------------------ clock
+    def start_clock(self) -> None:
+        """Schedule the next tick (nothing while paused or after the run ended)."""
+        self.stop_clock()
+        run = self.run
+        if run is None or not run.is_active or self.paused:
+            return
+        token = run.run_token
+        self.tick_id = self.after(config.TICK_MS, lambda: self.tick(token))
+
+    def stop_clock(self) -> None:
+        if self.tick_id is not None:
+            self.after_cancel(self.tick_id)
+            self.tick_id = None
+
+    def tick(self, token: int) -> None:
+        """Half a second has passed: one turn for the player and the drones.
+
+        The token guard stops a tick of an old (restarted) run.
+        """
+        self.tick_id = None
+        run = self.run
+        if run is None or token != run.run_token or not run.is_active or self.paused:
+            return
+        if self.auto_running or self.queued == FOLLOW_ROUTE:
+            target = None if run.has_valid_route() else run.position
+        elif self.queued is not None:
+            target = self.queued
+        else:
+            target = run.position                     # no key pressed: stand still
+        self.queued = None
+        self.do_step(target)
+        if run is not self.run or not run.is_active:
+            return                                    # caught, completed or left
+        if self.auto_running and not run.has_valid_route():
+            self.auto_running = False                 # arrived at the end of the route
+        self.replan_if_guided()
+        self.refresh()
+        self.start_clock()
+
+    def replan_if_guided(self) -> None:
+        """Dijkstra again from here and now when the planned route is out of date."""
+        run = self.run
+        if (self.guided and run is not None and run.is_active and not run.pro_mode
+                and not run.has_valid_route()):
+            run.plan_route(quiet=True)
 
     # ------------------------------------------------------------ actions
     def plan_route(self) -> None:
@@ -194,6 +257,7 @@ class GameplayScreen(BaseScreen):
         if run is None or not run.is_active or run.pro_mode:
             return
         result = run.plan_route()
+        self.guided = result.found
         if not result.found:
             self.no_route()
         elif run.route_goal == ge.ROUTE_TO_TERMINAL:
@@ -204,22 +268,40 @@ class GameplayScreen(BaseScreen):
         self.refresh()
 
     def move_next_step(self) -> None:
-        if self.run is not None and not self.auto_running:
-            self.do_step(None)
+        """Take the next step of the planned route on the next tick."""
+        if self.run is not None and not self.auto_running and self.run.has_valid_route():
+            self.queued = FOLLOW_ROUTE
 
-    def wait_turn(self) -> None:
-        """Stay on the spot for one turn while the drones keep moving."""
-        if self.run is not None and not self.auto_running:
-            self.do_step(self.run.position)
+    def toggle_pause(self) -> None:
+        run = self.run
+        if run is None or not run.is_active:
+            return
+        self.paused = not self.paused
+        if self.paused:
+            self.stop_clock()
+            self.set_message("Paused - the drones are frozen. Press Enter to resume.")
+        else:
+            self.set_message("Resumed.")
+            self.start_clock()
+        self.refresh()
 
     def do_step(self, target) -> bool:
-        """Ask the engine for one move; report a refusal; handle the outcome."""
+        """One tick in the engine; report a refusal; handle the outcome.
+
+        A refused move (wall, locked door, laser) still uses up the tick:
+        the player stands still while the drones move.
+        """
         run = self.run
+        old_pos = run.position
         result = run.step(target)
-        if not result.ok:
+        refused = not result.ok
+        if refused:
             self.set_message(result.reason, warn=True)
-            self.refresh()
-            return False
+            self.auto_running = False
+            result = run.step(run.position)
+            if not result.ok:
+                self.refresh()
+                return False
         if result.caught:
             self.cancel_timers()
             _, self.app.last_save_message = self.app.save_run(run)
@@ -239,7 +321,9 @@ class GameplayScreen(BaseScreen):
             token = run.run_token
             self.finish_id = self.after(FINISH_DELAY_MS, lambda: self.open_debrief(token))
             return True
-        if result.picked_key:
+        if refused or run.position == old_pos:
+            pass                       # nothing new to say on a tick spent standing still
+        elif result.picked_key:
             self.set_message("Keycard acquired — locked doors will open for you.")
         elif run.can_hack():
             self.set_message("You reached the terminal. Press Hack Terminal [H].")
@@ -254,40 +338,21 @@ class GameplayScreen(BaseScreen):
         else:
             self.set_message("")
         self.refresh()
-        return True
+        return not refused
 
     def start_auto_travel(self) -> None:
+        """Follow the planned route, one step on every tick."""
         run = self.run
         if run is None or self.auto_running or not run.has_valid_route():
             return
         self.auto_running = True
+        self.queued = None
         self.set_message("Auto Travel engaged.")
         self.refresh()
-        self.schedule_auto_step(run.run_token)
-
-    def schedule_auto_step(self, token: int) -> None:
-        self.after_id = self.after(config.AUTO_TRAVEL_DELAY_MS,
-                                   lambda: self.auto_step(token))
-
-    def auto_step(self, token: int) -> None:
-        """One animated step. The token guard stops callbacks from an old run."""
-        self.after_id = None
-        run = self.run
-        if not self.auto_running or run is None or token != run.run_token:
-            return
-        moved = self.do_step(None)
-        if moved and self.auto_running and run.has_valid_route():
-            self.schedule_auto_step(token)
-        else:
-            self.auto_running = False
-            self.refresh()
 
     def stop_auto_travel(self) -> None:
-        if self.auto_running or self.after_id is not None:
+        if self.auto_running:
             self.auto_running = False
-            if self.after_id is not None:
-                self.after_cancel(self.after_id)
-                self.after_id = None
             self.set_message("Auto Travel stopped.")
             self.refresh()
 
@@ -298,6 +363,7 @@ class GameplayScreen(BaseScreen):
         run.collect_objective()
         self.set_message(f"The {run.mission.objective_name} is secured. Now get to "
                          "extraction.")
+        self.replan_if_guided()
         self.refresh()
 
     def open_terminal(self) -> None:
@@ -325,8 +391,12 @@ class GameplayScreen(BaseScreen):
                 return
         self.cancel_timers()
         run.restart()
+        self.guided = False
+        self.paused = False
+        self.queued = None
         self.set_message("Mission restarted. The facility is back to normal.")
         self.refresh()
+        self.start_clock()
 
     def return_to_menu(self) -> None:
         self.app.show("menu")
@@ -388,13 +458,15 @@ class GameplayScreen(BaseScreen):
         text, style = STATUS_TEXT[run.status]
         if run.status == ge.CAUGHT and run.spotted_by:
             text = f"Spotted by the {run.spotted_by}"
+        elif self.paused and run.is_active:
+            text, style = "Paused", "PanelWarn.TLabel"
         self.rows["Status"].set(text, style)
         self.rows["Security"].set(self.security_text(), "PanelWarn.TLabel")
         if run.is_caught():
             self.rows["Event"].set("Mission failed", "PanelAlert.TLabel")
         elif (not run.pro_mode and run.is_active
               and run.position in run.watched_next_turn()):
-            self.rows["Event"].set("Danger: a drone looks HERE next turn!",
+            self.rows["Event"].set("Danger: a drone looks HERE on the next tick!",
                                    "PanelAlert.TLabel")
         else:
             self.rows["Event"].set("All clear", "PanelGood.TLabel")
@@ -407,7 +479,9 @@ class GameplayScreen(BaseScreen):
         self.set_enabled("step", route_ok and not auto)
         self.set_enabled("auto", route_ok and not auto)
         self.set_enabled("stop", auto)
-        self.set_enabled("wait", active and not auto)
+        self.set_enabled("pause", active)
+        self.buttons["pause"].configure(text="Resume  [Enter]" if self.paused
+                                        else "Pause  [Enter]")
         self.set_enabled("collect", run.can_collect() and not auto)
         self.set_enabled("hack", run.can_hack() and not auto)
         self.set_enabled("restart", run.status != ge.COMPLETED)

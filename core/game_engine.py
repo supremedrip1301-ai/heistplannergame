@@ -9,9 +9,12 @@ Status flow
     any active status -> NO_ROUTE  (no safe route left; restart or leave)
     any active status -> CAUGHT    (a patrol drone saw the player)
 
-Turns
-    Every move AND every Wait is one turn. After each turn the patrol drones
-    advance one tile and the engine checks whether any drone can see the player.
+Turns (real time)
+    The game clock ticks every config.TICK_MS (0.5 s). The UI calls step()
+    exactly once per tick: with the move the player chose since the last tick,
+    or with the current tile when no key was pressed (a wait). In the same turn
+    the patrol drones advance one tile, then the engine checks whether any drone
+    can see the player. So one tick is one edge of the planner's state graph.
 """
 
 import logging
@@ -23,7 +26,7 @@ from core.missions import DOOR, KEYCARD, LASER, build_tile_costs
 from core.pathfinding import RouteResult, is_walkable, step_direction
 from core.puzzles import make_puzzle
 from core.scoring import calculate_score
-from core.state_planner import WAIT_COST, PlanContext, count_waits, plan_state_route
+from core.state_planner import PlanContext, count_waits, plan_state_route
 
 logger = logging.getLogger(__name__)
 
@@ -90,14 +93,14 @@ class MissionRun:
         self.position = self.mission.start
         self.objective_collected = False
         self.status = PLANNING
-        self.moves = 0                             # turns taken (moves + waits)
-        self.waits = 0
+        self.moves = 0                             # tiles moved
+        self.waits = 0                             # ticks spent standing still
         self.effort = 0
         self.route = None                          # RouteResult or None
         self.route_goal = ROUTE_TO_TARGET
         self.score = None                          # ScoreBreakdown when completed
         self.result_saved = False
-        self.clock = 0                             # drone clock = turns taken
+        self.clock = 0                             # drone clock = ticks so far
         self.has_key = False
         self.terminal_solved = False
         self.puzzle = None                         # created when the terminal is opened
@@ -164,11 +167,13 @@ class MissionRun:
                           self.blocked_tiles())
         return plan_state_route(ctx, self.position, goal, self.clock, self.has_key)
 
-    def plan_route(self) -> RouteResult:
+    def plan_route(self, quiet: bool = False) -> RouteResult:
         """Plan the cheapest safe route to the current target.
 
         If the lasers block every route, plan to the terminal instead.
-        Pro mode has no route guidance at all.
+        Pro mode has no route guidance at all. quiet=True is the automatic
+        re-plan on a clock tick: if it finds nothing, the run goes on (the
+        status is not set to NO_ROUTE).
         """
         if not self.is_active or self.pro_mode:
             self.route = None
@@ -180,6 +185,9 @@ class MissionRun:
             self.route_goal = ROUTE_TO_TERMINAL
         if result.found:
             self.route = result
+            self.route.cost = self.remaining_route_cost()   # effort only, waits are free
+        elif quiet:
+            self.route = None
         else:
             self.route = None
             self.status = NO_ROUTE
@@ -200,8 +208,11 @@ class MissionRun:
         return step_direction(self.route.path[0], self.route.path[1])
 
     def step_cost(self, old_pos, new_pos) -> int:
+        """Effort of one tick. Standing still is free: the clock runs in real
+        time, so thinking must not cost points. (The planner still charges
+        WAIT_COST for a wait, so it prefers routes that finish sooner.)"""
         if old_pos == new_pos:
-            return WAIT_COST
+            return 0
         return self.tile_costs[self.mission.tile_at(new_pos)]
 
     def remaining_route_cost(self) -> int:
@@ -214,13 +225,12 @@ class MissionRun:
 
     # ------------------------------------------------------------ movement
     def wait(self) -> StepResult:
-        """Stay on the spot for one turn (the drones keep moving)."""
+        """Stand still for one tick (the drones keep moving)."""
         return self.step(self.position)
 
     def step(self, target=None) -> StepResult:
-        """Move one tile (or wait when target is the current tile).
-
-        Without a target, follow the planned route. Every move in the game
+        """One tick of the game clock: move one tile, or wait when target is
+        the current tile. Without a target, follow the planned route. Every move in the game
         goes through here, so walls, locked doors and active lasers can never
         be entered.
         """
@@ -251,11 +261,12 @@ class MissionRun:
         self.clock = self.clock + 1
         self.effort = self.effort + self.step_cost(old_pos, target)
         self.position = target
-        self.moves = self.moves + 1
-        if target == old_pos:
-            self.waits = self.waits + 1
-        if self.status == PLANNING:
-            self.status = IN_PROGRESS
+        if target != old_pos:
+            self.moves = self.moves + 1
+            if self.status == PLANNING:
+                self.status = IN_PROGRESS
+        elif self.status != PLANNING:
+            self.waits = self.waits + 1    # ticks before the first move are not counted
 
         if following:
             self.route = RouteResult(self.route.path[1:], None, True)
